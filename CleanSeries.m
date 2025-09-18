@@ -4,11 +4,11 @@ function CleanSeries(GUIControl)
 % Calls CleanSpike, CleanFilter, and AutoPlotTimeSeries
 
 % get list of all files in MITT directory
-ncleantot = length(GUIControl.MITTdir);
+ncleantot = length(GUIControl.MITTdir.name);
 
 for nclean = 1:ncleantot
     % get input file name
-    inname = [GUIControl.odir,filesep,GUIControl.MITTdir(nclean).name];
+    inname = [GUIControl.odir,filesep,GUIControl.MITTdir.name{nclean}];
     % load input file
     load(inname,'Config','Data');
     
@@ -19,7 +19,7 @@ for nclean = 1:ncleantot
             % send to CleanSpike and return the new data
             Data = CleanSpike(Config,Data,GUIControl);
             % mark Config file as despiked
-            Config.Despiked = 1;
+            Config.Despiked = true;
         end
     end
     % filter using butterworth
@@ -29,13 +29,13 @@ for nclean = 1:ncleantot
             % send to CleanFilter and return the new data
             Data = CleanFilter(Config,Data,GUIControl);
             % mark Config file as filtered
-            Config.Filtered = 1;
+            Config.Filtered = true;
         end
     end
     % display
     if GUIControl.plotTimeSeries
-        % send to subprogram to plot the time seties
-        PlotTimeSeries(Config,Data,[])
+        % send to subprogram to plot the time series
+        PlotTimeSeries(Config,Data,1)
     end
     
     % save data

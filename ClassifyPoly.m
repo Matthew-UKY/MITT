@@ -39,7 +39,7 @@ while outlier
         e=b|c|d;
 
         outlier = sum(e)>1;
-        goodCellsii(goodCellsiimem(e))=0;
+        goodCellsii(goodCellsiimem(e))=false;
     else
         outlier = 0;
     end

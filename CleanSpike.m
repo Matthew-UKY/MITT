@@ -39,24 +39,21 @@ end
 
 %% preprocess data
 % remove long term trend (median/linear)
-if GUIControl.Preprocess == 1 || GUIControl.Preprocess == 3
+if strcmp(GUIControl.Preprocess,'Median') || strcmp(GUIControl.Preprocess,'High Pass')
     for ncomp = 1:ncomptot
         medians = median(Raw(:,:,ncomp));
-        for nC = 1:nCtot
-            HighDat(:,nC,ncomp) = Raw(:,nC,ncomp)-medians(nC);
-        end
+        HighDat(:,:,ncomp) = Raw(:,:,ncomp)-medians;
     end
-elseif GUIControl.Preprocess == 2
+elseif strcmp(GUIControl.Preprocess,'Linear')
     for ncomp = 1:ncomptot
         HighDat(:,:,ncomp) = detrend(Raw(:,:,ncomp));
     end
 end
 LowDat = Raw-HighDat;
 % remove long term trend (filter)
-if GUIControl.Preprocess == 3
+if strcmp(GUIControl.Preprocess,'High Pass')
     Detrendi = HighDat; % use median removed data to input into filter
     % highpass filter is applied
-    %GUIControl.HighPassTime = 5; % coefficient
     windowSize = Config.Hz*GUIControl.HighPassTime; % filtersize window for removal of long term trends
     highpassfilt = ones(1,round(windowSize))/round(windowSize); 
     for ncomp = 1:ncomptot

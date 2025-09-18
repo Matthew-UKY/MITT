@@ -5,7 +5,10 @@ function PlotTimeSeries(Config,Data,nCellmem)
 % subfunctions include ConvStruct2Multi, ConvMulti2Struct, TransMAT
 
 % determine number of analyses
-Anames = {'Despiked','Filtered'};
+Anames = {'Vel','Despiked','Filtered'};
+yAnalysis = [true,Config.Despiked,Config.Filtered];
+Anames = Anames(yAnalysis);
+leg = Anames; % legend names
 nAtot = length(Anames);
 
 % determine number of components 
@@ -13,39 +16,21 @@ ncomptot = length(Config.comp);
 
 % create a multidimensional array in 4D with rows, columns, sheets and volumes 
 % as time intervals, cells, components, and analyses
-Pdata = zeros(Config.ntimetot,Config.nCells,ncomptot,nAtot+1);
-
-% get raw data and save in Pdata
-Pdata(:,:,:,1) = ConvStruct2Multi(Data.Vel,Config.comp);
-
-leg{1} = 'Raw';
-nidx = 2;
+Pdata = zeros(Config.ntimetot,Config.nCells,ncomptot,nAtot);
 
 %% get other analyses and save in Pdata
 % for each analysis
 for nA = 1:nAtot
-    % check if analysis was completed
-    eval(['chk = Config.',Anames{nA},';']);
-    if chk
-        % convert structure to multidimensional array format
-        eval(['Pdata(:,:,:,nidx) = ConvStruct2Multi(Data.',Anames{nA},',Config.comp);']);
-        % add name to legend
-        leg{nidx} = Anames{nA};
-        
-        nidx = nidx+1;
-    else
-        Pdata(:,:,:,nidx) = [];
-    end
+    % convert structure to multidimensional array format
+    Pdata(:,:,:,nA) = ConvStruct2Multi(Data.(Anames{nA}),Config.comp);
 end
 
 %% get correlation data
 % determine if correlation data is available
 CORy = isfield(Data,'Cor');
 if CORy
-    for nc = 1:ncomptot
-        % create a string with field names
-        eval(['compstr(nc) = {''Beam',num2str(nc),'''};']);
-    end
+    % create a string with field names
+    compstr = {'Beam1','Beam2','Beam3','Beam4'};
     COR = ConvStruct2Multi(Data.Cor,compstr);
 else
     COR = [];
@@ -59,12 +44,12 @@ end
 
 % if a list of values were sent in nCellmem, then only those cellnumbers
 % will be plotted, otherwise all cells will be plotted
-if isempty(nCellmem);
+if isempty(nCellmem)
     nCellmem = 1:Config.nCells;
 end
 
 % for each cell
-for nCell = nCellmem;
+for nCell = nCellmem
     % isolate the correct correlation data
     if ~isempty(COR)
         CORi = squeeze(COR(:,nCell,:));

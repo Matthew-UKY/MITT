@@ -1,6 +1,6 @@
 function Data = CleanFilter(Config,Data,GUIControl)
 % controls frequency filtering of time series
-% called from AClean
+% called from MITT
 % subfunctions include ConvStruct2Multi, ConvMulti2Struct, butt3filt
 
 %% initialize variables
