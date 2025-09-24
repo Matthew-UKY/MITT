@@ -9,7 +9,7 @@ inname = [GUIControl.CSVControlpathname,CSVControl.filename,'.mat'];
 % get Config data from subprogram
 Config = CalcConfigVectrinoII(CSVControl,inname);
 % save component names in Config
-Config.comp = {'u','v','w1','w2'};
+Config.comp = {'u';'v';'w1';'w2'};
 % get all fields in CSVControl and put them in Config
 fnames = fieldnames(CSVControl);
 nftot = length(fnames);
@@ -20,7 +20,8 @@ end
 % if a sampling locations algorithm was specified
 if GUIControl.Sampling
     % get position data using CalcXYZfile
-    eval(['Config = ',GUIControl.CalcXYZfile(1:end-2),'(Config);']);
+    CalcXYZfile = str2func(GUIControl.CalcXYZfile(1:end-2)); % rmv .m
+    Config = CalcXYZfile(Config);
 end
 
 % calculate derived position data

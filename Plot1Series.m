@@ -23,8 +23,8 @@ if nttot<=window
 end
 
 % velocity plot axes variables
-ymaxabs = max(squeeze(pdat(:,natot,:)));
-yminabs = min(squeeze(pdat(:,natot,:)));
+ymaxabs = max(squeeze(pdat(:,1,:)));
+yminabs = min(squeeze(pdat(:,1,:)));
 if isfinite(ymaxabs(1)*yminabs(1)) && ymaxabs(1)~=yminabs(1)
     yint = ceil(10*(ymaxabs-yminabs))/100;
     ymax = ceil(ymaxabs./yint).*yint;
@@ -60,7 +60,7 @@ if ymaxpp==yminpp
     ymaxpp=ymaxpp+1;
 end
 % if there is no variability in signal set default ranges
-if std(pdat(:,natot))==0
+if std(pdat(:,1))==0
     ymaxpp=1;
     yminpp=0;
 end
@@ -169,7 +169,7 @@ for nc = 1:1:nctot
     %% add data to axes
     % velocity time series
     set(plt1,'CurrentAxes',long);
-    for na = 1:2%natot
+    for na = 1:natot
         vline = line(1:nttot,pdat(:,na,nc),...
             'Color',colo{na},...
             'LineWidth',linw(na));

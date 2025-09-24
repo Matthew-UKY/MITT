@@ -19,8 +19,8 @@ if isempty(faQCname)||GUIControl.resetFilter
     end
 
     ncomptot = length(Config.comp);
-    goodCellsi = ones(Config.nCells,ncomptot);
-    goodCellsii = ones(Config.nCells,ncomptot);
+    goodCellsi = true(Config.nCells,ncomptot);
+    goodCellsii = true(Config.nCells,ncomptot);
     
     % create matrix to store
     nQtot = ncomptot+1+faQC.Range+faQC.w1w2xcorr+ncomptot*(faQC.Correlation+faQC.xcorr+faQC.Spikes+faQC.InertialSlope+faQC.PolyFilt);
@@ -30,7 +30,7 @@ if isempty(faQCname)||GUIControl.resetFilter
     
     % filter by position in the water column
     outofwater = Config.zZ<=0 | Config.zZ>=1;
-    goodCellsi(outofwater,:) = 0;
+    goodCellsi(outofwater,:) = false;
     Qcnames{Qi} = 'z/Z';
     Qdat(:,Qi) = Config.zZ;
     Qi = Qi+1;
@@ -43,67 +43,67 @@ if isempty(faQCname)||GUIControl.resetFilter
     %% filtering subprograms
     % filter by range
     if faQC.Range
-        if ~isempty(faQC.nigood)||faQC.nigood>1;
+        if ~isempty(faQC.nigood)||faQC.nigood>1
             if faQC.nigood > Config.nCells
-                goodCellsi(:,:) = 0;
+                goodCellsi(:,:) = false;
             else 
-                goodCellsi(1:faQC.nigood-1,:)=0;
+                goodCellsi(1:faQC.nigood-1,:) = false;
             end
         end
         if ~isempty(faQC.negood)||faQC.negood<Config.nCells
-            goodCellsi(faQC.negood+1:end,:)=0;
+            goodCellsi(faQC.negood+1:end,:) = false;
         end
     end
     % filter by signal correlation
     if faQC.Correlation && isfield(Data,'Cor')
         for ncomp = 1:ncomptot
-            compi = char(Config.comp(ncomp));
+            compi = Config.comp{ncomp};
             [goodCellsii(:,ncomp),QCor] = ClassifyCor(compi,Data.Cor,faQC.Corthreshold);
             Qcnames{Qi} = ['CORBeam',num2str(ncomp)];
             Qdat(:,Qi) = QCor(:,ncomp);
             Qi = Qi+1;
         
         end
-        goodCellsi = goodCellsi.*goodCellsii;
+        goodCellsi = goodCellsi & goodCellsii;
 
     end
 
     % filter by percent mode
     if faQC.pctmodecheck
         for ncomp = 1:ncomptot
-            compi = char(Config.comp(ncomp));
-            xdata = Data.(GUIControl.X.var).(compi);
+            compi = Config.comp{ncomp};
+            xdata = Data.(GUIControl.Xvar).(compi);
             [goodCellsii(:,ncomp),Modepct] = ClassifyMode(xdata,faQC.pctmode/100);
             Qcnames{Qi} = ['Mode',compi,' (%)'];
             Qdat(:,Qi) = Modepct;
             Qi = Qi+1;
         
         end
-        goodCellsi = goodCellsi.*goodCellsii;
+        goodCellsi = goodCellsi & goodCellsii;
 
     end
     % filter by correlation between adjacent cells
     if faQC.xcorr
         % for each component
         for ncomp = 1:ncomptot
-            compi = char(Config.comp(ncomp));
-            xdata = Data.(GUIControl.X.var).(compi);
+            compi = Config.comp{ncomp};
+            xdata = Data.(GUIControl.Xvar).(compi);
             [goodCellsii(:,ncomp),Qxcorr] = Classifyxcorr(xdata,faQC.xcorrthreshold);
             Qcnames{Qi} = ['X corr ',compi,' (%)'];
             Qdat(:,Qi) = Qxcorr;
             Qi = Qi+1;
         end
-        goodCellsi = goodCellsi.*goodCellsii;
+        goodCellsi = goodCellsi & goodCellsii;
 
     end
     % filter by Hurther Lemmin w1 w2 
     if faQC.w1w2xcorr
         if isfield(Data.Vel,'w2')
-            xdata = Data.(GUIControl.X.var);
-            [goodCellsiii,QNRW] = ClassifyNoiseRatio(xdata,faQC.w1w2xcorrthreshold,Config.transformationMatrix);
+            xdata = Data.(GUIControl.Xvar);
+            [goodCellsii,QNRW] = ClassifyNoiseRatio(xdata,faQC.w1w2xcorrthreshold,Config.transformationMatrix);
             Qdat(:,Qi) = QNRW;
             for ncomp = 1:ncomptot
-                goodCellsi(:,ncomp) = goodCellsi(:,ncomp).*goodCellsiii;
+                goodCellsi(:,ncomp) = goodCellsi(:,ncomp) & goodCellsii;
             end
         else
             Qdat(:,Qi) = NaN;
@@ -114,11 +114,11 @@ if isempty(faQCname)||GUIControl.resetFilter
 
     end
     % filter by spike numbers
-    if faQC.Spikes 
+    if faQC.Spikes
         if isfield(Data,'SpikeY')
             % for each component
             for ncomp = 1:ncomptot
-                compi = char(Config.comp(ncomp));
+                compi = Config.comp{ncomp};
                 SpikeY = diff(Data.Vel.(compi)-Data.Despiked.(compi))>0.001;
 
                 SpikeYi = Data.SpikeY.(compi);
@@ -127,7 +127,7 @@ if isempty(faQCname)||GUIControl.resetFilter
                 Qdat(:,Qi) = QSpike;
                 Qi = Qi+1;
             end
-            goodCellsi = goodCellsi.*goodCellsii;
+            goodCellsi = goodCellsi & goodCellsii;
         else
             Qdat(:,Qi) = NaN;
             
@@ -143,8 +143,8 @@ if isempty(faQCname)||GUIControl.resetFilter
             xdata = Data.Vel;
         end
         for ncomp = 1:ncomptot
-            compi = char(Config.comp(ncomp));
-            %xdata = Data.(C.X.var).(compi);
+            compi = Config.comp{ncomp};
+            %xdata = Data.(C.Xvar).(compi);
             xdatai = xdata.(compi);
             [goodCellsii(:,ncomp),QSis] = ClassifyNoiseFloor(xdatai,faQC.InertialSlopeThreshold,Config.Hz,Config.zpos,Config.samplingVolume);
             Qcnames{Qi} = ['S Inertial ',compi];
@@ -152,22 +152,22 @@ if isempty(faQCname)||GUIControl.resetFilter
             Qi = Qi+1;
         end
 
-        goodCellsi = goodCellsi.*goodCellsii;
+        goodCellsi = goodCellsi & goodCellsii;
     end
     % filter by a 3rd order polynomial to the mean, std, and skewness of profile
     if faQC.PolyFilt
-        ydata = Config.(GUIControl.Y.var);
+        ydata = Config.(GUIControl.Yvar);
 
         % for each component
         for ncomp = 1:ncomptot
-            compi = char(Config.comp(ncomp));
-            xdata = Data.(GUIControl.X.var).(compi);
+            compi = Config.comp{ncomp};
+            xdata = Data.(GUIControl.Xvar).(compi);
             goodCellsii(:,ncomp) = ClassifyPoly(ydata,xdata,goodCellsi(:,ncomp),faQC.zscore);
             Qcnames{Qi} = ['Poly fit ',compi];
             Qdat(:,Qi) = goodCellsii(:,ncomp);
             Qi = Qi+1;
         end
-        goodCellsi = goodCellsi.*goodCellsii;
+        goodCellsi = goodCellsi & goodCellsii;
     end
     % classify with ARMA model results 
 % % moved it to after cleaned models
@@ -179,14 +179,14 @@ if isempty(faQCname)||GUIControl.resetFilter
 % end
 
     for ncomp=1:ncomptot
-        compi = char(Config.comp(ncomp));
-        eval(['Config.goodCells.',compi,' = goodCellsi(:,ncomp)'';']);% ' added Sept 10 so that goodCells is a 1xnCells matrix, with each value in a column (why?  so annoying!)
+        compi = Config.comp{ncomp};
+        Config.goodCells.(compi) = goodCellsi(:,ncomp);
     end
     
     %% output to table
     % add in goodCells
     for ncomp=1:ncomptot
-        compi = char(Config.comp(ncomp));
+        compi = Config.comp{ncomp};
         Qcnames{ncomp} = ['goodCells ',compi];
         Qdat(:,ncomp) = goodCellsi(:,ncomp);
     end

@@ -10,7 +10,7 @@ nmaxmode = nttot*pctmode;
 [~,nummode,~] = mode(vel);
 flat = nummode' > nmaxmode;
 if any(flat)
-    goodCellsi(flat) = 0;
+    goodCellsi(flat) = false;
 end
 Modepct = nummode'/nttot*100;
 end

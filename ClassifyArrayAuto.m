@@ -6,16 +6,14 @@ function ClassifyArrayAuto(GUIControl)
 %% directories
 
 % for each file in MITTdir
-nsFtot = length(GUIControl.MITTdir);
+nsFtot = length(GUIControl.MITTdir.name);
 for nsF = 1:nsFtot
+    % get input file name
+    inname = [GUIControl.odir,filesep,GUIControl.MITTdir.name{nsF}];
     % load Config and Data
-    AllinOne = load([GUIControl.odir,filesep,GUIControl.MITTdir(nsF).name],'Config','Data');
-    Config = AllinOne.Config;
-    Data = AllinOne.Data;
-    Anames = getAnames(Data);
+    load(inname,'Config','Data');
 
-    GUIControl.X.var = Anames{GUIControl.nxvar};
-    GUIControl.Y.var = 'zZ';
+    GUIControl.Xvar = GUIControl.nxvar;
 
     % get y data
     Config = CalcGoodCells(Config,Data,GUIControl);
@@ -27,7 +25,7 @@ for nsF = 1:nsFtot
     % save faQC to Config
     Config.faQC = GUIControl.faQC;
     % append updated Config to file
-    save([GUIControl.odir,filesep,GUIControl.MITTdir(nsF).name],'Config','-append');
+    save([GUIControl.odir,filesep,GUIControl.MITTdir.name{nsF}],'Config','-append');
 end
         
 end

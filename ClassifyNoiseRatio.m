@@ -5,7 +5,7 @@ function [goodCellsii,QNRW] = ClassifyNoiseRatio(dat,w1w2xcorrthreshold,transfor
 comp = fieldnames(dat);
 
 datm = ConvStruct2Multi(dat,comp);
-[nttot,nCells,ncomptot] = size(datm);
+[ntimetot,nCells,ncomptot] = size(datm);
 
 
 if nCells == 1

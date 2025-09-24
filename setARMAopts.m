@@ -42,7 +42,7 @@ elseif Cutoffmethod == 2
 end            
 
 % turn off visibility of main screen
-set(pltLaunch.id,'Visible','off')
+set(pltLaunch.FigureHandle,'Visible','off')
 
 %% set callback functions
 % to set the modelOrdermethod (Fixed manual or BIC optimization)
@@ -86,9 +86,9 @@ set(B_ARMA.P.doneARMA,'Callback',{@hdoneARMACallback,pltLaunch,pltARMA});
         % get values from subwindow
         ARMAopts = subGetValues(B_ARMA.ARMAopts,ARMAopts);
         % attach data to the pltLaunch window
-        setappdata(pltLaunch.id,'ARMAopts',ARMAopts);
+        setappdata(pltLaunch.FigureHandle,'ARMAopts',ARMAopts);
         % make the pltLaunch window visible
-        set(pltLaunch.id,'Visible','on')
+        set(pltLaunch.FigureHandle,'Visible','on')
         % turn off visibility of pltARMA subwindow
         set(pltARMA.id,'Visible','off')
      end

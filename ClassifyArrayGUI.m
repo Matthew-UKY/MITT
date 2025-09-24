@@ -5,1034 +5,836 @@ function ClassifyArrayGUI(GUIControl,selmem)
 % input is based on a control.csv file - each file should have passed
 % through the MITT toolbox and have a Dataa and Configa file for each array
 
-
 %% Create figure
-% create basic figure
-[plt,axe] = qcFigure;
+% create figure, axes, and panels
+[plt,axe,P] = qcFigure;
+nxtot = plt.UserData.nxtot;
 
 % create uicontrol buttons in figure
-B = qcButtons(plt,axe);
+B = qcButtons(P);
 
 % initialize buttons
-set(B.selfile,'String',{GUIControl.MITTdir.name});
-set(B.Select,'Visible','on');
-set(B.replace,'Enable','off');
-set(B.Actions,'Visible','off');
-set(B.Filter,'Visible','off');
-set(B.Y.panel,'Visible','off');
-for nx = 1:plt.nxtot
-    set(B.X(nx).panel,'Visible','off');
-end
+initializeUIElements(B,P,nxtot)
+
+% set callback functions
+initializeCallbackFunctions(B,axe,nxtot)
 
 % if files have been preselected (for example for duplicates)
 if ~isempty(selmem)
-    set(B.selfile,'Value',selmem);
+    B.selfile.Items = selmem;
+else
+    B.selfile.Items = GUIControl.MITTdir.name; % select file listbox
 end
 
-%% set callback functions for the different uicontrol buttons
-% Select arrays panel
-set(B.selfiledone,'Callback',@hselfileCallback);
-set(B.replace,'Callback',@hreplaceCallback);
-% Actions panel
-set(B.actfile,'Callback',@hactfileCallback);
-set(B.plotpositions,'Callback',@hplotpositionsCallback);
-set(B.plotone,'Callback',@hplotoneCallback);
+% Load all the data into one struct, to be passed around to each callback
+nFtot = length(GUIControl.MITTdir.name);
+AllStruct = struct();
+for nF = 1:nFtot
+    inname = [GUIControl.odir,filesep,GUIControl.MITTdir.name{nF}];
+    load(inname,'Config','Data');
+    AllStruct(nF).Config = Config;
+    AllStruct(nF).Data = Data;
+end
 
-set(B.plotarrayimage,'Callback',@hplotarrayimageCallback);
-set(B.plotaicomp,'Callback',@hplotaicompCallback);
-set(B.plotaianalysis,'Callback',@hplotaianalysisCallback);
-
-set(B.filtarray,'Callback',@hfiltarrayCallback);
-set(B.filtanalysis,'Callback',@hfiltanalysisCallback);
-%
-% Classify Options panel
-set(B.reClassify,'Callback',@hreClassifyCallback);
-set(B.manualGoodCells,'Callback',@hmanualGoodCellsCallback);
-set(B.saveQC,'Callback',@hsaveQCCallback);
-
-% y axis callbacks
-set(B.Y.var,'Callback',@hyvarCallback);
-set(B.Y.min,'Callback',@hyminCallback);
-set(B.Y.max,'Callback',@hyminCallback);
-
-% x axis callbacks
-for nx = 1:plt.nxtot
-    set(B.X(nx).var,'Callback',{@hxvarCallback,nx});
-    set(B.X(nx).analysis,'Callback',{@hxanalysisCallback,nx});
-    set(B.X(nx).min,'Callback',{@hxminCallback,nx});
-    set(B.X(nx).max,'Callback',{@hxminCallback,nx});
-    set(B.X(nx).clear,'Callback',{@hxclearCallback,nx});
+% put everything in UserData, to be passed around to each callback
+UserData = plt.UserData;
+UserData.axe = axe;
+UserData.P = P;
+UserData.B = B;
+UserData.GUIControl = GUIControl;
+UserData.AllStruct = AllStruct;
+plt.UserData = UserData;
 end
 
 %% Callback functions
-
 %%%%%%%%%%
 % Select arrays panel
-    %%%%%
-    function hselfileCallback(hObject, eventData, handles)
-    % to select files to display in selection list 
-    % acts when 'Done' button is pushed on 'Select Arrays' panel
-        yvarname = {'zZ'};
-
-        % get values
-        nsFmem = get(B.selfile,'Value');
-        % calc number of files selected
-        nsFtot = length(nsFmem);
-        colline = getColline(nsFtot);
-
-        % create zero matrices
-        Configa = cell(1,nsFtot);
-        Dataa = cell(1,nsFtot);
-        % load Dataa 
-        for nsF = 1:nsFtot
-            AllinOne = load([GUIControl.odir,'\',GUIControl.MITTdir(nsFmem(nsF)).name],'Config','Data');
-            Configa{nsF} = AllinOne.Config;
-            Dataa{nsF} = AllinOne.Data;
-        end
-        % get all field names (including from subFields)
-        Configanames = fieldnames(Configa{1});
-        Dataanames = ['dummy';subFieldnames(Dataa{1})]; % subroutine to get all field names from array with sub array
-        % set fieldnames
-        set(B.Y.var,'String',Configanames);
-        % find default value and set
-        nyvar = find(strcmp(yvarname,Configanames)); % zZ is hardcoded in
-        set(B.Y.var,'Value',nyvar);
-        for nx = 1:plt.nxtot
-            set(B.X(nx).var,'String',Dataanames);
-        end
-        set(B.actfile,'String',{GUIControl.MITTdir(nsFmem).name});
-        % attach data to figure
-        setappdata(plt.id,'Configa',Configa)
-        setappdata(plt.id,'Dataa',Dataa)
-        setappdata(plt.id,'Configanames',Configanames)
-        setappdata(plt.id,'Dataanames',Dataanames)
-
-        % turn on necessary panels
-        set(B.Y.panel,'Visible','on');
-        set(B.Y.var,'Enable','on');
-        set(B.selfiledone,'Enable','off');
-    end
 %%%%%
-    function hreplaceCallback(hObject, eventData, handles)
-    % to allow the arrays to be replaced on the axes without having to re-enter
-    % everything
-    % acts when 'Replace' button is pushed on the 'Select Arrays' panel
 
-        % get values
-        nsFmem = get(B.selfile,'Value');
-        nyvar = get(B.Y.var,'Value');
-        % calc number of files selected
-        nsFtot = length(nsFmem);
-        colline = getColline(nsFtot);
-        % get data from figure
-        xdata = getappdata(plt.id,'xdata');
-        % create zero matrices
-        Configa = cell(1,nsFtot);
-        Dataa = cell(1,nsFtot);
-        ydata = cell(1,nsFtot);
-        % replace Configa and Dataa with data from new files 
-        for nsF = 1:nsFtot
-            % load
-            AllinOne = load([GUIControl.odir,'\',GUIControl.MITTdir(nsFmem(nsF)).name],'Config','Data');
-            Configa{nsF} = AllinOne.Config;
-            Dataa{nsF} = AllinOne.Data;
-            if nsF == 1
-                % get all field names (including from subFields)
-                Configanames = fieldnames(Configa{1});
-                Dataanames = ['dummy';subFieldnames(Dataa{1})]; % subroutine to get all field names from array with sub array
-            end
-            eval(['ydata{nsF} = Configa{',num2str(nsF),'}.',Configanames{nyvar},';']);
-        end
-        % set active data
-        set(B.actfile,'String',{GUIControl.MITTdir(nsFmem).name});
-        % check which axes are active and replot
-        for nx = 1:plt.nxtot
-            if ~isempty(xdata{nx})
-                % get values
-                nanalysis = get(B.X(nx).analysis,'Value');
-                typeanalysis = get(B.X(nx).analysis,'String');
-                nxvar = get(B.X(nx).var,'Value');% subtract 1 for dummy value
+% select file button
+function hselfileCallback(~, ~, ~)
+% to select files to display in selection list 
+% acts when 'Done' button is pushed on 'Select Arrays' panel
+plt = gcbf;
+B = plt.UserData.B;
+P = plt.UserData.P;
+GUIControl = plt.UserData.GUIControl;
+AllStruct = plt.UserData.AllStruct;
+nxtot = plt.UserData.nxtot;
+axe = plt.UserData.axe;
+    yvar = GUIControl.Yvar;
+    
+    % get names of files selected
+    sFnames = B.selfile.Value;
+    sFindex = B.selfile.ValueIndex;
+    % calc number of files selected
+    nsFtot = length(sFnames);
+    % set active array names
+    B.actfile.Items = sFnames;
 
-                set(plt.id,'CurrentAxes',axe.id(nx))
-                % allow axes limits to change automatically
-                set(axe.id(nx),'XLimMode','auto');
-                % clear axis
-                cla
-                % empty array dat needs to be declared in GUI figure
-                dat = [];
-                % for each selected array
-                for nsF = 1:nsFtot
-                    % get data from Dataa
-                    eval(['dat = Dataa{',num2str(nsF),'}.',Dataanames{nxvar},';']);
-                    % sub array analysis
-                    xdata{nx,nsF} = CalcArrayStats(dat,typeanalysis(nanalysis,:));
-                    % box is a combination of mean and standard deviation data that needs additional
-                    % lines to be plotted
-                    if strcmp(typeanalysis(nanalysis,:),'box')
-                        serror = std(dat);
-                        meanx1 = mean(dat);
-                        lx = [meanx1-serror;meanx1+serror];
-                        ly = [ydata{nsF};ydata{nsF}];
-                        line(lx,ly,'Color',col1,'LineStyle','-','Marker','+');
-                    end
-                    
-                    % plot line
-                    h(nsF) = line(xdata{nx,nsF},ydata{nsF},'Color',colline(nsF,:),'LineStyle','none','Marker','*');
-                    
-                end
-                if nx==1 
-                    legend(h,get(B.actfile,'String'),...
-                        'TextColor','k',...
-                        'EdgeColor','k');
-                end
-                % get automatically determined limits to plot
-                xlim = get(gca,'XLim');
-                % write values to the appropriate editable boxes
-                set(B.X(nx).min,'String',num2str(xlim(1)));
-                set(B.X(nx).max,'String',num2str(xlim(2)));
-
-            end
-            
-        end
-        % if patches exist already in the figure
-        if isappdata(plt.id,'hpatch')
-            % get handles
-            rmappdata(plt.id,'hpatch')
-        end
-
-        set(B.Filter,'Visible','off');
-
-        % attach data to figure
-        setappdata(plt.id,'Configa',Configa)
-        setappdata(plt.id,'Dataa',Dataa)
-        setappdata(plt.id,'Configanames',Configanames)
-        setappdata(plt.id,'Dataanames',Dataanames)
-        setappdata(plt.id,'ydata',ydata);
-        setappdata(plt.id,'xdata',xdata);
-   
+    % create selected files struct from AllStruct
+    SelStruct = struct();
+    for nsF = 1:nsFtot
+        SelStruct(nsF).Config = AllStruct(sFindex(nsF)).Config;
+        SelStruct(nsF).Data = AllStruct(sFindex(nsF)).Data;
     end
+    % get all field names (including from subFields)
+    allConfignames = fieldnames(SelStruct(1).Config);
+    [~,allDatanames] = subFieldnames(SelStruct(1).Data);
+    allDatanames = ['dummy';allDatanames];
+    % set fieldnames
+    B.Y.var.Items = allConfignames;
+    % set default values; zZ is hardcoded in
+    B.Y.var.Value = yvar;
+    for nx = 1:nxtot
+        B.X(nx).var.Items = allDatanames;
+    end
+% save workspace vars back to UserData
+plt.UserData.B = B;
+plt.UserData.P = P;
+% store new data in UserData in plt
+plt.UserData.SelStruct = SelStruct;
+plt.UserData.allConfignames = allConfignames;
+plt.UserData.allDatanames = allDatanames;
+
+    % don't allow the done button to be pushed again
+    B.selfiledone.Enable = 'off';
+    % allow replacement of data
+    B.replace.Enable = 'on';
+    % allow input point to be selected on axes
+    set(axe(:),'HitTest','on')
+    
+    % turn on actions and filter panels 
+    P.Y.panel.Visible = 'on';
+    P.Actions.Visible = 'on';
+    P.Filter.Visible = 'on';
+    
+    hyvarCallback
+    Config = SelStruct(1).Config;
+    comp = Config.comp;
+    for nx = 1:nxtot
+        set(P.X(nx).panel,'Visible','on');
+        % plot default profiles
+        B.X(nx).var.Value = [GUIControl.nxvar,'.',comp{nx}];
+        B.X(nx).analysis.Value = 'mean'; % default
+        hxanalysisCallback([],[],nx)
+
+        % place the legend on the first axis
+        if nx==1 
+            legend(axe(1),B.selfile.Value, ...
+                TextColor = 'k', ...
+                EdgeColor = 'k', ...
+                FontSize = 9);
+        end
+    end
+    hactfileCallback
+    % set field values from Config data
+    B.faQC = subSetValues(B.faQC,Config.faQC);
+end
+% replace button
+function hreplaceCallback(~,~,~)
+% replace files easily, without having to re-enter everything
+% acts when 'Replace' button is pushed on 'Select Arrays' panel
+plt = gcbf;
+B = plt.UserData.B;
+P = plt.UserData.P;
+AllStruct = plt.UserData.AllStruct;
+nxtot = plt.UserData.nxtot;
+axe = plt.UserData.axe;    
+    % get names of files selected
+    sFnames = B.selfile.Value;
+    sFindex = B.selfile.ValueIndex;
+    % calc number of files selected
+    nsFtot = length(sFnames);
+    % set active array names
+    B.actfile.Items = sFnames;
+
+    % create selected files struct from AllStruct
+    SelStruct = struct();
+    for nsF = 1:nsFtot
+        SelStruct(nsF).Config = AllStruct(sFindex(nsF)).Config;
+        SelStruct(nsF).Data = AllStruct(sFindex(nsF)).Data;
+    end
+
+% store data in UserData
+plt.UserData.B = B;
+plt.UserData.P = P;
+plt.UserData.SelStruct = SelStruct;
+
+    % clear previous plots
+    for nx = 1:nxtot
+        cla(axe(nx))
+    end
+
+    % create new ydata variable
+    hyvarCallback
+
+    % create new xdata variable
+    Config = SelStruct(1).Config;
+    for nx = 1:nxtot
+        % use previous user-input to find xdata
+        hxanalysisCallback([],[],nx)
+
+        % place the legend on the first axis
+        if nx==1 
+            legend(axe(1),B.selfile.Value, ...
+                TextColor = 'k', ...
+                EdgeColor = 'k', ...
+                FontSize = 9);
+        end
+    end
+    % set field values from Config data
+    B.faQC = subSetValues(B.faQC,Config.faQC);
+end
+
+%%%%%%%%%%
+% y axis panel callbacks
+%%%%%
+% executes when y axis variable is changed
+function hyvarCallback(~, ~, ~)
+% to get ydata values from SelStruct
+plt = gcbf;
+B = plt.UserData.B;
+SelStruct = plt.UserData.SelStruct;
+nxtot = plt.UserData.nxtot;
+    % file information
+    sFnames = B.selfile.Value;
+    nsFtot = length(sFnames);
+    yvar = B.Y.var.Value;
+
+    % loop to get ydata for each file 
+    ydata = cell(1,nsFtot);
+    for nsF = 1:nsFtot
+        Config = SelStruct(nsF).Config;
+        ydata{nsF} = Config.(yvar);
+    end
+
+    % make an empty xdata array if one doesn't already exist
+    if ~isfield(plt.UserData,'xdata')
+        xdata = cell(nxtot,nsFtot);
+        plt.UserData.xdata = xdata;
+    end
+% save in UserData
+plt.UserData.ydata = ydata;
+end
+% executes when either y minimum or y maximum editable box is changed
+function hyminCallback(~, ~, ~)
+% to set y axis limits manually
+plt = gcbf;
+axe = plt.UserData.axe;
+B = plt.UserData.B;
+nxtot = plt.UserData.nxtot;
+    % get values
+    ymin = B.Y.min.Value;
+    ymax = B.Y.max.Value;
+    % set y axis limits on all axes
+    for nx = 1:nxtot
+        axe(nx).YLim = [ymin ymax];
+    end
+plt.UserData.axe = axe;
+end
+
+%%%%%%%%%%
+% xaxis callbacks
+%%%%%
+% does nothing for now
+function hxvarCallback(~, ~, nx)
+
+end
+% executes when analysis is changed on axis nx
+function hxanalysisCallback(~, ~, nx)
+% to plot xdata vs ydata for a given axis
+plt = gcbf;
+B = plt.UserData.B;
+xdata = plt.UserData.xdata;
+ydata = plt.UserData.ydata;
+axe = plt.UserData.axe;
+SelStruct = plt.UserData.SelStruct;
+    % get button values
+    typeanalysis = B.X(nx).analysis.Value;
+    xvar = B.X(nx).var.Value;
+    xvar = strsplit(xvar,'.');
+
+    % empty array dat needs to be declared in GUI figure
+    dat = [];
+    % loop to plot Dataa
+    nsFtot = length(SelStruct);
+    colline = getColline(nsFtot);
+    h = gobjects(nsFtot,1);
+    for nsF = 1:nsFtot
+        % get data from SelStruct
+        if isscalar(xvar)
+            dat = SelStruct(nsF).Data.(xvar);
+        elseif length(xvar) == 2
+            dat = SelStruct(nsF).Data.(xvar{1}).(xvar{2});
+        end
+        % sub array analysis
+        xdata{nx,nsF} = CalcArrayStats(dat,typeanalysis);
+        if strcmp(typeanalysis,'box ')
+            serror = std(dat);
+            meanx1 = mean(dat);
+            lx = [meanx1-serror;meanx1+serror];
+            ly = [ydata{nsF};ydata{nsF}];
+            line(axe(nx),lx,ly,'Color',col1,'LineStyle','-','Marker','+');
+        end
+        % plot line
+        h(nsF) = line(axe(nx),xdata{nx,nsF},ydata{nsF}, ...
+            'Color',colline(nsF,:), ...
+            'LineStyle','none', ...
+            'Marker','*');
+    end
+    
+    % get automatically determined limits to plot
+    xlim = axe(nx).XLim;
+    ylim = axe(nx).YLim;
+    % write values to the appropriate editable boxes
+    B.Y.min.Value = ylim(1);
+    B.Y.max.Value = ylim(2);
+    B.X(nx).min.Value = xlim(1);
+    B.X(nx).max.Value = xlim(2);
+% save data in UserData
+plt.UserData.xdata = xdata;
+plt.UserData.B = B;
+end
+% executes when either x minimum or x maximum editable box is changed
+function hxminCallback(~, ~, nx)
+% to set x axis limits manually
+plt = gcbf;
+B = plt.UserData.B;
+axe = plt.UserData.axe;
+    % get values
+    xmin = B.X(nx).min.Value;
+    xmax = B.X(nx).max.Value;
+    % set axis x limits
+    axe(nx).XLim = [xmin xmax];
+plt.UserData.axe = axe;
+end
+% executes when clear axis button is pushed
+function hxclearCallback(~, ~, nx)
+% to clear all data and legends from axis
+plt = gcbf;
+axe = plt.UserData.axe;
+    % allow axes limits to change automatically
+    axe(nx).XLimMode = 'auto';
+    % clear axis
+    cla(axe(nx))
+end
+
 %%%%%%%%%%
 % Actions panel
-    %%%%%
-    function hplotpositionsCallback(hObject, eventData, handles)
-    % to show positions of probes and sampling volumes within the channel
-        % retrieve data from figure
-        Configa=getappdata(plt.id,'Configa');
+%%%%%
+% to show positions of probes and sampling volumes within the channel
+function hplotpositionsCallback(~, ~, ~)
+% retrieve data from figure
+plt = gcbf;
+SelStruct = plt.UserData.SelStruct;
+GUIControl = plt.UserData.GUIControl;
+PlotPositions(SelStruct,GUIControl.outname);
+end
+% to enable filtering and plotting of active file
+function hactfileCallback(~, ~, ~)
+plt = gcbf;
+B = plt.UserData.B;
+SelStruct = plt.UserData.SelStruct;
+    % get values
+    Anames = {'Vel','Despiked','Filtered'};
+    Config = SelStruct(1).Config;
+    yAnalysis = [true Config.Despiked,Config.Filtered];
+    Anames = Anames(yAnalysis);
+    % display the available data component names
+    set(B.filtanalysis,'Items',Anames);
+    set(B.plotaicomp,'Items',Config.comp)
+    set(B.plotaianalysis,'Items',Anames);
+plt.UserData.B = B;
+end
+% to plot timeseries from selected data point in profile
+function hplotoneCallback(~, ~, ~)
+plt = gcbf;
+ydata = plt.UserData.ydata;
+SelStruct = plt.UserData.SelStruct;
+B = plt.UserData.B;
+    % get values
+    naF = get(B.actfile,'ValueIndex');
 
-        PlotPositions(Configa,GUIControl.outname);
+    % get position of point to plot
+    yi = plt.UserData.yi;
+
+    % find nearest point
+    [~,naP] = min(abs(yi-ydata{naF}));
+
+    % plot that point as a time series
+    PlotTimeSeries(SelStruct(naF).Config,SelStruct(naF).Data,naP);
+end
+% to turn on filtering panel and load previous filter
+function hplotarrayimageCallback(~, ~, ~)
+% acts when 'Classify' button is pushed on 'Options' panel
+plt = gcbf;
+B = plt.UserData.B;
+    % enable filtering components dropdown menu
+    set(B.plotaicomp,'Enable','on');
+plt.UserData.B = B;
+end
+% to turn on filtering panel and load previous filter
+function hplotaicompCallback(~, ~, ~)
+% acts when a component is chosen on 'Options' panel
+plt = gcbf;
+B = plt.UserData.B;
+    % enable filter analysis
+    set(B.plotaianalysis,'Enable','on');
+plt.UserData.B = B;
+end
+% to load profile filtering parameters
+function hplotaianalysisCallback(~, ~, ~)
+% acts when an analysis type is chosen on 'Options' panel
+plt = gcbf;
+B = plt.UserData.B;
+SelStruct = plt.UserData.SelStruct;
+ydata = plt.UserData.ydata;
+    % get values
+    aFname = get(B.actfile,'Value');
+    naF = get(B.actfile,'ValueIndex');
+    compi = get(B.plotaicomp,'Value');
+    aType = get(B.plotaianalysis,'Value');
+    yvar = get(B.Y.var,'Value');
+
+    % isolate correct data
+    Config = SelStruct(naF).Config;
+    Data = SelStruct(naF).Data;
+
+    % get goodCells for the appropriate component
+    goodCellsi = Config.goodCells.(compi);
+    dat = Data.(aType).(compi);
+    aTimedata = Data.timeStamp;
+    ptitle.top = aFname;
+    ptitle.xaxis = 'time (s)';
+    ptitle.yaxis = ['Config.',yvar];
+    ptitle.legend = [' Data.',aType,'.',compi,' (m/s)'];
+    PlotTimeSpace(aTimedata,ydata{naF},dat,goodCellsi,ptitle)
+end
+% plot classification results for active array in a table
+function hfiltarrayCallback(~, ~, ~)
+% acts when 'Classify data quality' button is pushed on 'Options' panel
+plt = gcbf;
+B = plt.UserData.B;
+P = plt.UserData.P;
+SelStruct = plt.UserData.SelStruct;
+GUIControl = plt.UserData.GUIControl;
+    % get file listed as the active array in 'set active array' window
+    naF = get(B.actfile,'ValueIndex');
+    aAnalysis = get(B.filtanalysis,'Value');
+    yvar = get(B.Y.var,'Value');
     
-    end
-    function hactfileCallback(hObject, eventData, handles)
-    % to enable filtering and plotting of active file
-    
-        % turn on fields
-        set(B.plotone,'Enable','on');
-        set(B.filtarray,'Enable','on');
-        set(B.plotarrayimage,'Enable','on');
-        % get values
-        naF = get(B.actfile,'Value');
-        % retrieve data from figure
-        Configa=getappdata(plt.id,'Configa');
-        Dataa=getappdata(plt.id,'Dataa');
+    % save vars to GUIControl
+    GUIControl.Xvar = aAnalysis;
+    GUIControl.Yvar = yvar;
 
-        Anames = getAnames(Dataa{naF});
-        % display the available data component names
-        set(B.filtanalysis,'Enable','off');
-        set(B.filtanalysis,'String',Anames);
-        set(B.Filter,'Visible','off');
-        set(B.plotaicomp,'String',Configa{naF}.comp)
-        set(B.plotaicomp,'Enable','off');
-        set(B.plotaianalysis,'Enable','off');
-        set(B.plotaianalysis,'String',Anames);
-        
+    % plot table of classification results
+    Config = SelStruct(naF).Config;
+    PlotQCTable(Config);        
 
-    end
-    %%%%%
-    function hplotoneCallback(hObject, eventData, handles)
-    % to plot timeseries from selected Dataa point in profile
-    
-        % get values
-        naF = get(B.actfile,'Value');
-        % retrieve data from figure
-        Configa=getappdata(plt.id,'Configa');
-        Dataa=getappdata(plt.id,'Dataa');
-        ydata = getappdata(plt.id,'ydata');
-        % get position of point to plot
-        [xi,yi] = ginput(1);
-        % find nearest point
-        [dum,naP] = min(abs(yi-ydata{naF}));
+plt.UserData.GUIControl = GUIControl;
+end
+% does nothing right now
+function hfiltanalysisCallback(~, ~, ~)
+% acts when an analysis type is chosen on 'Options' panel
 
-        PlotTimeSeries(Configa{naF},Dataa{naF},naP);
-
-    end
-    %%%%%
-    function hplotarrayimageCallback(hObject, eventData, handles)
-    % to turn on filtering panel and load previous filter
-    % acts when 'Classify' button is pushed on 'Options' panel
-
-        % enable filtering components dropdown menu
-        set(B.plotaicomp,'Enable','on');
-        
-    end
-    %%%%%
-    function hplotaicompCallback(hObject, eventData, handles)
-    % to turn on filtering panel and load previous filter
-    % acts when a component is chosen on 'Options' panel
-
-        % enable filter analysis
-        set(B.plotaianalysis,'Enable','on');
-    
-    end
-    %%%%%
-    function hplotaianalysisCallback(hObject, eventData, handles)
-    % to load profile filtering parameters
-    % acts when an analysis type is chosen on 'Options' panel
-        % get values
-        nsFmem = get(B.selfile,'Value');
-        naF = get(B.actfile,'Value');
-        naC = get(B.plotaicomp,'Value');
-        naA = get(B.plotaianalysis,'Value');
-        nyvar = get(B.Y.var,'Value');
-        Anames = get(B.filtanalysis,'String');
-        % retrieve data from figure
-        Configa=getappdata(plt.id,'Configa');
-        Dataa=getappdata(plt.id,'Dataa');
-        ydata = getappdata(plt.id,'ydata');
-        Configanames = getappdata(plt.id,'Configanames');
-        % isolate correct data
-        Config = Configa{naF};
-        Data = Dataa{naF};
-
-        % get goodCells for the appropriate component
-        % compi is name of component subfield in goodCells
-        compi = char(Config.comp(naC));
-        xvar = char(Anames(naA));
-        goodCellsi = [];
-        eval(['goodCellsi = Config.goodCells.',compi,';']);
-        Datai = []; % must be declared in GUI file
-        eval(['Datai = Data.',xvar,'.',compi,';']);
-        aixdata = Data.timeStamp;
-        ptitle.top = GUIControl.MITTdir(nsFmem(naF)).name;
-        ptitle.xaxis = 'time (s)';
-        ptitle.yaxis = ['Config.',Configanames{nyvar}];
-        ptitle.legend = [' Data.',xvar,'.',compi,' (m/s)'];
-        PlotTimeSpace(aixdata,ydata{naF},Datai,goodCellsi,ptitle)
-    end
-    %%%%%
-    
-    function hfiltarrayCallback(hObject, eventData, handles)
-    % to turn on filtering panel and load previous filter
-    % acts when 'Filter' button is pushed on 'Options' panel
-
-        % enable filtering components dropdown menu
-        set(B.filtanalysis,'Enable','on');
-        
-    end
-    %%%%%
-    function hfiltanalysisCallback(hObject, eventData, handles)
-    % to load profile filtering parameters
-    % acts when an analysis type is chosen on 'Options' panel
-    
-        % get file listed as the active array in 'set active array' window
-        naF = get(B.actfile,'Value');
-        naA = get(B.filtanalysis,'Value');
-        nyvar = get(B.Y.var,'Value');
-        Anames = get(B.filtanalysis,'String');
-        
-        % retrieve data from figure
-        Configa = getappdata(plt.id,'Configa');
-        Dataa = getappdata(plt.id,'Dataa');
-        Configanames = getappdata(plt.id,'Configanames');
-        
-        % 
-        GUIControl.X.var = Anames{naA};
-        GUIControl.Y.var = Configanames{nyvar};
-        GUIControl.resetFilter = 0; % load previous analysis, if available
-        
-        Config = CalcGoodCells(Configa{naF},Dataa{naF},GUIControl);
-        % plot table of classificaiton results
-        PlotQCTable(Config);
-        set(0,'currentfigure',plt.id);
-        
-        % set field values from Config data
-        B.faQC = subSetValues(B.faQC,Config.faQC);        
-        
-        % draw new patches
-        Dataanames = getappdata(plt.id,'Dataanames');
-        hpatch = plotgreyp(Config.goodCells,Config.comp,Dataanames,B,plt,axe,naF);
-
-        % attach data to figure
-        setappdata(plt.id,'hpatch',hpatch);
-        setappdata(plt.id,'faQC',Config.faQC);
-        setappdata(plt.id,'goodCells',Config.goodCells);
-        set(B.Filter,'Visible','on');
-    end
+end
 
 %%%%%%%%%%
 % Filter Options panel
 %%%%%
-    function hreClassifyCallback(hObject, eventData, handles)
-    % 
-        % get values
-        naF = get(B.actfile,'Value');
-        naA = get(B.filtanalysis,'Value');
-        nyvar = get(B.Y.var,'Value');
-        Anames = get(B.filtanalysis,'String');
+% reclassify selected array
+function hreClassifyCallback(~, ~, ~)
+plt = gcbf;
+B = plt.UserData.B;
+SelStruct = plt.UserData.SelStruct;
+GUIControl = plt.UserData.GUIControl;
+    % get values
+    naF = get(B.actfile,'ValueIndex');
+    aAname = get(B.filtanalysis,'Value');
+    yvar = get(B.Y.var,'Value');
 
-        % retrieve data from figure
-        Configa = getappdata(plt.id,'Configa');
-        Dataa = getappdata(plt.id,'Dataa');
-        Configanames = getappdata(plt.id,'Configanames');
+    % set C values from Interactive Quality Control Plot
+    GUIControl.faQC = subGetValues(B.faQC,[]);
+    GUIControl.Xvar = aAname;
+    GUIControl.Yvar = yvar;
+    GUIControl.resetFilter = 1;
+    
+    % send to subprogram to filter array based on faQC parameters
+    Config = CalcGoodCells(SelStruct(naF).Config,SelStruct(naF).Data,GUIControl);
+    % plot table of classificaiton results
+    PlotQCTable(Config);
+SelStruct(naF).Config = Config;
+plt.UserData.SelStruct = SelStruct;
+plt.UserData.GUIControl = GUIControl;
+end
+% manually adjust classification of selected cell
+function hmanualGoodCellsCallback(~, ~, ~) 
+% get file listed as the active array in 'set active array' window
+plt = gcbf;
+B = plt.UserData.B;
+SelStruct = plt.UserData.SelStruct;
+ydata = plt.UserData.ydata;
+    naF = get(B.actfile,'ValueIndex');
 
-        % set C values from Interactive Quality Control Plot
-        GUIControl.faQC = subGetValues(B.faQC,[]);
-        GUIControl.X.var = Anames{naA};
-        GUIControl.Y.var = Configanames{nyvar};
-        GUIControl.resetFilter = 1;
-        
-        % send to subprogram to filter array based on faQC parameters
-        Config = CalcGoodCells(Configa{naF},Dataa{naF},GUIControl);
-        % plot table of classificaiton results
-        PlotQCTable(Config);
+    % retrieve data from UserData
+    Config = SelStruct(naF).Config;
+    goodCells = Config.goodCells;
+    Qdat = Config.Qdat;
+    ydat = ydata{naF};
+    comp = fieldnames(goodCells);
+    ncomptot = length(comp);
 
-        set(0,'currentfigure',plt.id);
-        % draw new patches
-        Dataanames = getappdata(plt.id,'Dataanames');
-        hpatch = plotgreyp(Config.goodCells,Config.comp,Dataanames,B,plt,axe,naF);
+    % find nearest point to user input
+    yselect = plt.UserData.yi;
+    [~,indx] = min(abs(yselect-ydat));
+    
+    goodCellsm = ConvStruct2Multi(goodCells,comp);
+    goodCellsm = permute(goodCellsm,[1,3,2]); % remove singleton dimension
 
-        % attach data to figure
-        setappdata(plt.id,'faQC',GUIControl.faQC);
-        setappdata(plt.id,'goodCells',Config.goodCells);
-        setappdata(plt.id,'hpatch',hpatch);
-   
+    if all(goodCellsm(indx,:))
+        goodCellsm(indx,:) = 0;
+    else
+        goodCellsm(indx,:) = 1;
     end
-
-    function hmanualGoodCellsCallback(hObject, eventData, handles)
-        % get file listed as the active array in 'set active array' window
-        naF = get(B.actfile,'Value');
-        % retrieve data from figure
-        goodCells=getappdata(plt.id,'goodCells');
-        ydataa = getappdata(plt.id,'ydata');
-        ydata = ydataa{naF};
-        comp = fieldnames(goodCells);
-        ncomptot = length(comp);
-        [xselect,yselect] = ginput(1);
-        % find nearest point
-        [dum,nogoo] = min(abs(yselect-ydata));
-        
-        goodCellsm = ConvStruct2Multi(goodCells,comp);
-        
-%         % convert multi to struct (what the fuck is this about?)
-%         commented out on June 17 2014
-%         if length(ydata)>1
-%             goodCellsm = ConvStruct2Multi(goodCells,comp)';
-%         else
-%             goodCellsm = ConvStruct2Multi(goodCells,comp);
-%         end
-        %switch it
-        if all(goodCellsm(:,nogoo))
-            goodCellsm(:,nogoo) = 0;
-        else
-            goodCellsm(:,nogoo) = 1;
-        end
-        for ncomp = 1:ncomptot
-            goodCells.(comp{ncomp}) = goodCellsm(ncomp,:);
-        end
-       
-        % draw new patches
-        Dataanames = getappdata(plt.id,'Dataanames');
-        hpatch = plotgreyp(goodCells,comp,Dataanames,B,plt,axe,naF);
-
-        % attach data to figure
-        setappdata(plt.id,'goodCells',goodCells);
-        setappdata(plt.id,'hpatch',hpatch);
-        
+    % save in goodCells
+    for ncomp = 1:ncomptot
+        goodCells.(comp{ncomp}) = goodCellsm(:,ncomp);
     end
-    function hsaveQCCallback(hObject, eventData, handles)
-        % function to save QC to output file
-        
-        % get values
-        nsFmem = get(B.selfile,'Value');
-        naF = get(B.actfile,'Value');
-        % retrieve data from figure
-        Configa = getappdata(plt.id,'Configa');
-        goodCells=getappdata(plt.id,'goodCells');
-        faQC = getappdata(plt.id,'faQC');
+    % save in Qdat
+    Qdat(:,1:ncomptot) = goodCellsm;
+SelStruct(naF).Config.goodCells = goodCells;
+SelStruct(naF).Config.Qdat = Qdat;
+plt.UserData.SelStruct = SelStruct; 
+end
+% get x/y coords from user input and display on axe
+function hAxeClickCallback(src,~,~)
+plt = gcbf;
+axe = plt.UserData.axe;
+nxtot = plt.UserData.nxtot;
+    % find x,y coords
+    xyz = src.CurrentPoint;
+    xi = xyz(1,1);
+    yi = xyz(1,2);
 
-        Config = Configa{naF};
-        Config.faQC = faQC;
-        Config.goodCells = goodCells;
-
-        Configa{naF} = Config;
-        setappdata(plt.id,'Configa',Configa);
-
-        % append Config to existing output file
-        save([GUIControl.odir,'\',GUIControl.MITTdir(nsFmem(naF)).name],'Config','-append');
-        
-    end
-
-%%%%%%%%%%
-% y axis callbacks
-    %%%%%
-    % executes when y axis variable is changed
-    function hyvarCallback(hObject, eventData, handles)
-    % to get ydata values from Configa structure
-        % get values
-        nsFmem = get(B.selfile,'Value');
-        nyvar = get(B.Y.var,'Value');
-        % calc number of files selected
-        nsFtot = length(nsFmem);
-        % get data from figure
-        Configa = getappdata(plt.id,'Configa');
-        Configanames = getappdata(plt.id,'Configanames');
-
-        % loop to get ydata for each file 
-        ydata = cell(1,nsFtot);
-        xdata = cell(plt.nxtot,nsFtot);
-        for nsF = 1:nsFtot
-            eval(['ydata{nsF} = Configa{',num2str(nsF),'}.',Configanames{nyvar},';']);
-        end
-        
-        % attach data to figure
-        setappdata(plt.id,'ydata',ydata);
-        setappdata(plt.id,'xdata',xdata);
-         % turn on fields
-        set(B.X(1).panel,'Visible','on');
-        set(B.X(1).var,'Enable','on');
-        % set control
-        uicontrol(B.X(1).var);
-
-    end
-    %%%%%
-    % executes when either y minimum or y maximum editable box is changed
-    function hyminCallback(hObject, eventData, handles)
-    % to set y axis limits manually
-        % get values
-        ymin = str2double(get(B.Y.min,'String'));
-        ymax = str2double(get(B.Y.max,'String'));
-        % set y axis limits on all axes
-        for nx = 1:plt.nxtot
-            set(axe.id(nx),'YLim',[ymin ymax]);
-        end
-    end
-
-%%%%%%%%%%
-% xaxis callbacks
-    %%%%%
-    % executes when x variable is changed on axis nx
-    function hxvarCallback(hObject, eventData, nx)
-    % to turn on the x analysis field
-        % turn on fields
-        set(B.X(nx).analysis,'Enable','on');
-        % set control
-        uicontrol(B.X(nx).analysis); % set focus on the button bforward
-    end
-    %%%%%
-    % executes when analysis is changed on axis nx
-    function hxanalysisCallback(hObject, eventData, nx)
-    % to plot xdata vs ydata for a given axis
-        % get values
-        nanalysis = get(B.X(nx).analysis,'Value');
-        typeanalysis = get(B.X(nx).analysis,'String');
-        nxvar = get(B.X(nx).var,'Value');% 
-        % get data from figure
-        Dataa=getappdata(plt.id,'Dataa');
-        Dataanames = getappdata(plt.id,'Dataanames');
-        ydata=getappdata(plt.id,'ydata');
-        xdata=getappdata(plt.id,'xdata');
-        % set current axes
-        set(plt.id,'CurrentAxes',axe.id(nx))
-        % empty array dat needs to be declared in GUI figure
-        dat = [];
-        % loop to plot Dataa
-        nsFtot = length(Dataa);
-        colline = getColline(nsFtot);
-        for nsF = 1:nsFtot
-            % get data from Dataa
-            eval(['dat = Dataa{',num2str(nsF),'}.',Dataanames{nxvar},';']);
-            % sub array analysis
-            xdata{nx,nsF} = CalcArrayStats(dat,typeanalysis(nanalysis,:));
-            if strcmp(typeanalysis(nanalysis,:),'box')
-                serror = std(dat);
-                meanx1 = mean(dat);
-                lx = [meanx1-serror;meanx1+serror];
-                ly = [ydata{nsF};ydata{nsF}];
-                line(lx,ly,'Color',col1,'LineStyle','-','Marker','+');
+    % remove previous input point indicator from all axes
+    for i = 1:nxtot
+        children = axe(i).Children;
+        for j = 1:length(children)
+            plotType = children(j).Type;
+            if strcmp(plotType,'constantline')
+                delete(children(j))
             end
-            % plot line
-            h(nsF) = line(xdata{nx,nsF},ydata{nsF},'Color',colline(nsF,:),'LineStyle','none','Marker','*');
         end
-        
-        % get automatically determined limits to plot
-        xlim = get(gca,'XLim');
-        ylim = get(gca,'YLim');
-        % write values to the appropriate editable boxes
-        set(B.Y.min,'String',num2str(ylim(1)));
-        set(B.Y.max,'String',num2str(ylim(2)));
-        set(B.X(nx).min,'String',num2str(xlim(1)));
-        set(B.X(nx).max,'String',num2str(xlim(2)));
-
-        % attach data to figure
-        setappdata(plt.id,'xdata',xdata)
-        % turn on fields
-        set(B.Y.min,'Enable','on');
-        set(B.Y.max,'Enable','on');
-        set(B.X(nx).min,'Enable','on');
-        set(B.X(nx).max,'Enable','on');
-        set(B.X(nx).clear,'Enable','on');
-        if nx==1 
-            set(B.Actions,'Visible','on');
-            legend(h,get(B.actfile,'String'),...
-                'TextColor','k',...
-                'EdgeColor','k');
-        end
-        % enable next panel
-        if nx<plt.nxtot
-            set(B.X(nx+1).panel,'Visible','on');
-            set(B.X(nx+1).var,'Enable','on');
-        end
-        % allow replacement of data on axes
-        if nx == 1
-            set(B.replace,'Enable','on')
-        end
-    end
-    %%%%%
-    % executes when either x minimum or x maximum editable box is changed
-    function hxminCallback(hObject, eventData, nx)
-    % to set x axis limits manually
-        % get values
-        xmin = str2double(get(B.X(nx).min,'String'));
-        xmax = str2double(get(B.X(nx).max,'String'));
-        % set axis x limits
-        set(axe.id(nx),'XLim',[xmin xmax]);
-    end
-    %%%%%
-    % executes when clear axis button is pushed
-    function hxclearCallback(hObject, eventData, nx)
-    % to clear all data and legends from axis
-        % set current axis
-        set(plt.id,'CurrentAxes',axe.id(nx))
-        % allow axes limits to change automatically
-        set(axe.id(nx),'XLimMode','auto');
-        % clear axis
-        cla
     end
 
+    % plot the input point indicator on the plot
+    yline(src,yi,'--r',LineWidth = 0.1,Label = 'Input Point')
+    %{
+    % debug
+        clc
+        disp(xi)
+        disp(yi)
+    %}
+plt.UserData.xi = xi;
+plt.UserData.yi = yi;
+end
+% function to save QC to output file
+function hsaveQCCallback(~, ~, ~)
+plt = gcbf;
+SelStruct = plt.UserData.SelStruct;
+B = plt.UserData.B;
+GUIControl = plt.UserData.GUIControl;
+    % get active array
+    naF = get(B.actfile,'ValueIndex');
+    Config = SelStruct(naF).Config;
+    % append Config to existing output file
+    save([GUIControl.odir,filesep,GUIControl.MITTdir.name{naF}],'Config','-append');
 end
 
-%%%%%%%%%%
-% subprograms
-%%%%%
-
-%%%%%
-function [plt,axe]=qcFigure
+%% subprograms
+% create the interactive qaqc figure, axes, and panels
+function [plt,axe,P] = qcFigure
 % to create the Figure used for the interactive qc analysis.  
-% Note, this subprogram only includes the figures and axes, not the buttons
+% Subprogram includes figure, axes, and panels
 
-% set figure properties
-plt.id = figure;
-plt.xi = 1; % corner position of figure
-plt.yi = 1; 
-plt.nxtot = 3; % number of axes in x direction
-plt.nytot = 1; % number of axes in y direction
-plt.titlespace = 9; % distance above plots (mostly filled later with buttons)
-plt.col = [230 230 230]/255;
-% create multiple axes
-axe.xi = 1.1; % corner position of first axis
-axe.yi = 0.6;
-axe.scale = 8; % multiplier for axes
-axe.y = 1*axe.scale;
-axe.x = 1*axe.scale;
-axe.space = .4; % space between axes
-
-% size of figure
-plt.x = axe.xi+plt.nxtot*(axe.x+axe.space);
-plt.y = axe.yi+plt.nytot*(axe.y+axe.space)+plt.titlespace;
-
-% set figure properties
-set(plt.id,...
-    'Name','MITT Interactive Quality Control Window',...
-    'Units','centimeters',...
-    'InvertHardcopy','off',...
-    'Color',plt.col,...
-    'Position',[plt.xi plt.yi plt.x plt.y],...
-    'PaperPositionMode','auto');
-
-% size of axes
-axe.xin = axe.xi+(0:plt.nxtot-1)*(axe.x+axe.space);
-axe.yin = axe.yi;
-
-% create and set axes properties
-for nx=1:plt.nxtot
-    axe.id(nx) = axes('Units','centimeters',...
-        'Position',[axe.xin(nx) axe.yin axe.x axe.y],...
-        'Color','w',...
-        'NextPlot','add');
-    if nx>1
-        set(axe.id(nx),'YTickLabel',[]);
-    end
-end
-
-end
-%%%%%
-function hpatch = plotgreyp(goodCells,comp,Dataanames,B,plt,axe,naF)
-% to draw grey 'patches' on all axes to indicate positions that have been
-% judged to not be a goodCell
-% hpatch is the handle for the patches
-
-% create a multidimensional array from goodCells
-ncomptot = length(comp);
-nCells = length(goodCells.(comp{1}));
-goodCellsm = ConvStruct2Multi(goodCells,comp);
-
-% if patches exist already in the figure
-if isappdata(plt.id,'hpatch')
-    % get handles
-    hpatch = getappdata(plt.id,'hpatch');
-    % detect if graphic object handle
-    % for each axes
-    for nx = 1:plt.nxtot
-        if hpatch(nx,1)>0
-            % delete the patches
-            delete(hpatch(nx,:));
-        end
-    end
-    rmappdata(plt.id,'hpatch')
-end
-
-% get ylimits of the patches based on saved ydata and limits of the axes
-ydataa = getappdata(plt.id,'ydata');
-ylim = get(axe.id(1),'YLim');
-ydata = ydataa{naF};
-if nCells > 1
-    ylimi = [ylim(end) ydata(1:end-1)+diff(ydata)/2 ylim(1)];
-else
-    ylimi = ylim;
-end    
-% zeromatrix for hpatch based on number of cells and axes
-hpatch = zeros(plt.nxtot,nCells);
-
-% set criteria for good cell display
-
-% for each axes
-for nx = 1:plt.nxtot;
-    % get index value of x axis variable
-    xvar = get(B.X(nx).var,'Value');
-    % if xvar>1 (i.e. it is not an empty axis)
-    if xvar>1
-        % set current axis
-        set(plt.id,'CurrentAxes',axe.id(nx))
-        % get xname
-        xname = Dataanames{xvar};
-%         % initialize variable compy to get y component
-%         compy = zeros(1,ncomptot);
-%         
-%         for ncomp = 1:ncomptot
-%             compidx = strfind(xname,char(comp{ncomp}));
-%             % if
-%             if ~isempty(compidx)
-%                 compy(ncomp) = 1;
-%             else
-%                 
-%             end
-%         end
-%         ncompy = find(compy);
-        xlim = get(axe.id(nx),'XLim');
-
-        % all components must be good
-        if ncomptot == 1
-            ygood = goodCellsm;
-        else
-            goo2D=squeeze(goodCellsm(1,:,:));
-            ygood = all(goo2D,2);
-        end
-
-        % for each cell in the array
-        for ncell = 1:nCells
-            % draw the patch and save the handle
-            hpatch(nx,ncell) = patch([xlim fliplr(xlim)],...
-                [ylimi(ncell) ylimi(ncell) ylimi(ncell+1) ylimi(ncell+1)],...
-                [1 1 1]*ygood(ncell),...
-                'AlphaDataMapping','direct',...
-                'FaceAlpha',0.2,...
-                'EdgeAlpha',0);
-        end
-    end
-end
-
-end
-
-%%%%%
-function colline = getColline(ntot)
-% to create a color matrix with ntot number of different colors based on a matlab standard colormap
-% create unique color values for each file
-cmap = flipud(jet);%jet;% % jet coloring, could also be used with bone, autumn, etc.
-njettot = length(cmap);
-ngooc = floor(1:njettot/ntot:njettot);
-
-colline = cmap(ngooc,:);
-
-end
-
-%%%%%
-function B = qcButtons(plt,axe)
-% to create buttons & fields on figure
-% set colors for figure
+% defaults for entire figure
+Fsize = 12;
+Fname = 'Calibri';
+pltcol = [230 230 230]/255;
 backcol = [255 245 170]/255; % used on level 1 boxes
 backcol2 = [210 255 255]/255; % used on axes boxes
-btn.height = 0.7; % standard button height
-btn.width = axe.x/3;
-Fsize = 9;
 
-% ui panel listing all filter array options and parameters
-B.Select = uipanel(plt.id,'Title','Select arrays to plot',...
-            'Units','centimeters',...
-            'FontSize',Fsize,...
-            'BackgroundColor',backcol,...
-            'Position',[axe.xin(1),axe.yi+axe.y+4.5,axe.x+0.1,4.7]);
-% file selection listbox             
-B.selfile = uicontrol(plt.id,'Style','listbox',...
-            'Units','centimeters',...
-            'Parent',B.Select,...
-            'Position',[0,0,btn.width*2,4],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Max',5);
+% defaults for grid layout
+row1Height = 260;
+row2Height = 75;
+
+% defaults for panels
+def.Panel.Title = '';
+def.Panel.FontSize = Fsize;
+def.Panel.FontName = Fname;
+def.Panel.ForegroundColor = 'k'; % black
+def.Panel.BackgroundColor = 'w'; % white
+
+% defaults for axes
+nxtot = 3;
+
+% create figure
+plt = uifigure(...
+    Name = 'MITT Interactive Quality Control Window',...
+    Color = pltcol,...
+    WindowState = 'maximized');
+
+% create grid
+grid = uigridlayout(plt,[3,nxtot],...
+    RowHeight = {row1Height,row2Height,'1x'});
+
+% create and set panel properties
+pnl = uipanel(grid,...
+    BorderType = 'none');
+grid1 = uigridlayout(pnl,[2,1],...
+    RowHeight = {'1x','fit'},...
+    Padding = [0 0 0 0]);
+P.select = uipanel(grid1,def.Panel,...
+    Title = 'Select data to plot', ...
+    BackgroundColor = backcol);
+P.Y.panel = uipanel(grid1,def.Panel, ...
+    Title = 'y-axis data',...
+    BackgroundColor = backcol2);
+    P.Y.panel.Layout.Row = 2;
+P.Actions = uipanel(grid,def.Panel,...
+    Title = 'Actions',...
+    BackgroundColor = backcol);
+P.Filter = uipanel(grid,def.Panel,...
+    Title = 'Classify data quality - Options',...
+    BackgroundColor = backcol);
+for i = 1:3
+    P.X(i).panel = uipanel(grid,def.Panel,...
+        Title = ['x',num2str(i),'-axis Data'],...
+        BackgroundColor = backcol2);
+end
+
+% create and set axes properties
+axe = gobjects(nxtot,1);
+pnl = uipanel(grid);
+    pnl.Layout.Column = [1,3];
+    pnl.BorderType = 'none';
+t = tiledlayout(pnl,1,3);
+    t.TileSpacing = 'compact';
+    t.Padding = 'tight';
+for nx=1:nxtot
+    axe(nx) = nexttile(t);
+    if nx>1
+        axe(nx).YTickLabel = [];
+    end
+end
+
+% store some info in UserData field of plt
+plt.UserData.nxtot = nxtot;
+end
+% create buttons for qaqc figure
+function B = qcButtons(P)
+% to create buttons & fields on figure
+
+% defaults for entire figure
+Fsize = 12;
+Fname = 'Calibri';
+btn.width = 100; % pixels
+btn.height = 25; % pixels
+nxtot = 3;
+
+% defaults for grid
+def.Grid.RowSpacing = 1;
+def.Grid.ColumnSpacing = 1;
+def.Grid.Padding = [1 1 1 1];
+
+% defaults for uilabel
+def.Label.Text = '';
+def.Label.FontSize = Fsize;
+def.Label.FontName = Fname;
+def.Label.HorizontalAlignment = 'center';
+
+%defaults for uibutton
+def.Button.Text = '';
+def.Button.FontSize = Fsize;
+def.Button.FontName = Fname;
+def.Button.BackgroundColor = 'w';
+
+% defaults for uicheckbox
+def.Checkbox.Text = '';
+def.Checkbox.FontSize = Fsize;
+def.Checkbox.FontName = Fname;
+
+% defaults for uidropdown
+def.Dropdown.Items = {''};
+def.Dropdown.FontSize = Fsize;
+def.Dropdown.FontName = Fname;
+
+% defaults for uieditfield
+def.Editfield.FontSize = Fsize;
+def.Editfield.FontName = Fname;
+def.Editfield.HorizontalAlignment = 'center';
+
+% defaults for uilistbox
+def.Listbox.FontSize = Fsize;
+def.Listbox.FontName = Fname;
+def.Listbox.BackgroundColor = 'w'; % white
+
+
+%%%% file select panel
+% grid for positioning
+grid = uigridlayout(P.select,[3,2],def.Grid,...
+    RowHeight = {'1x',btn.height,btn.height},...
+    ColumnWidth = {'1x',btn.width});
+% file selection listbox  
+B.selfile = uilistbox(grid,def.Listbox,...
+    Multiselect = 'on');
+    B.selfile.Layout.Row = [1,3];
+    B.selfile.Layout.Column = 1;
 % file selection 'Done' pushbutton
-B.selfiledone = uicontrol(plt.id,'Style','pushbutton',...
-            'Units','centimeters',...
-            'Parent',B.Select,...
-            'Position',[btn.width*2,btn.height,btn.width,btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'String','Done');
+B.selfiledone = uibutton(grid,def.Button,...
+    Text = 'Done');
+    B.selfiledone.Layout.Row = 2;
 % file selection 'Replace' pushbutton
-B.replace = uicontrol(plt.id,'Style','pushbutton',...
-            'Units','centimeters',...
-            'Parent',B.Select,...
-            'Position',[btn.width*2,0,btn.width,btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'String','Replace');
-% Y axis variables panel
-B.Y.panel = uipanel(plt.id,'Title','y-axis Data',...
-            'Units','centimeters',...
-            'FontSize',Fsize,...
-            'BackgroundColor',backcol2,...
-            'Position',[axe.xin(1),axe.yi+axe.y+2.6,axe.x+0.1,1.3]);
-% Y axis variable popupmenu
-btn.num = 0;
-B.Y.var = uicontrol(plt.id,'Style','popupmenu',...
-            'Units','centimeters',...
-            'Parent',B.Y.panel,...
-            'Position',[0,btn.num*btn.height,btn.width*2,btn.height],...
-            'FontSize',Fsize,...
-            'Enable','off',...
-            'BackgroundColor','w',...
-            'String','y-axis Dataa');
-% Y axis minimum value editable field
-B.Y.min = uicontrol(plt.id,'Style','edit',...
-            'Units','centimeters',...
-            'Position',[btn.width*2,btn.num*btn.height,btn.width*0.5,btn.height],...
-            'Parent',B.Y.panel,...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Enable','off',...
-            'String','ymin');
-% Y axis maximum value editable field
-B.Y.max = uicontrol(plt.id,'Style','edit',...
-            'Units','centimeters',...
-            'Position',[btn.width*2.5,btn.num*btn.height,btn.width*0.5,btn.height],...
-            'Parent',B.Y.panel,...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Enable','off',...
-            'String','ymax');        
+B.replace = uibutton(grid,def.Button,...
+    Text = 'Replace');
+    B.replace.Layout.Row = 3;
 
+%%%% y-axis variables panel
+grid = uigridlayout(P.Y.panel,[1,3],def.Grid,...
+    RowHeight = {btn.height},...
+    ColumnWidth = {'1x',btn.width,btn.width});
+% Y axis variable dropdown list
+B.Y.var = uidropdown(grid,def.Dropdown,...
+    Items = {'y-axis Data'});
+% Y axis minimum value editable field
+B.Y.min = uieditfield(grid,'numeric',def.Editfield);
+% Y axis maximum value editable field
+B.Y.max = uieditfield(grid,'numeric',def.Editfield);
+
+%%%% x-axis variable panels
 % Dataa selection dropdown
-for nx = 1:plt.nxtot
-    B.X(nx) = Createaxebuttongroup(plt.id,axe.xin(nx),axe.x,axe.yi+axe.y,nx,btn,Fsize);
-    set(B.X(nx).panel,'BackgroundColor',backcol2)
+for nx = 1:nxtot
+    B.X(nx) = Createaxebuttongroup(P.X(nx).panel,def,btn);
 end    
 
-%
-B.Actions = uipanel(plt.id,'Title','Actions',...
-            'Units','centimeters',...
-            'FontSize',Fsize,...
-            'BackgroundColor',backcol,...
-            'Position',[axe.xin(2),axe.yi+axe.y+4.5,axe.x+0.1,4.7]);
-
-btn.num = 5;
+%%%% Actions panel
+grid = uigridlayout(P.Actions,[5,3],def.Grid,...
+    RowHeight = repmat({btn.height},[1,5]),...
+    ColumnWidth = {btn.width,btn.width,'1x'});
 % plot probe and sampling volume positions button
-B.plotpositions = uicontrol('Style','pushbutton',...
-            'Units','centimeters',...
-            'Parent',B.Actions,...
-            'Position',[0,btn.num*btn.height,btn.width*3,btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'String','Plot sampling volume positions');
-btn.num = btn.num-1;
+B.plotpositions = uibutton(grid,def.Button,...
+    Text = 'Plot sampling volume positions');
+    B.plotpositions.Layout.Column = [1,3];
 % active file dropdown
-B.actfilename = uicontrol(plt.id,'Style','text',...
-            'Units','centimeters',...
-            'Parent',B.Actions,...
-            'Position',[0,btn.num*btn.height,btn.width,btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'String','Set active array');
-B.actfile = uicontrol(plt.id,'Style','popupmenu',...
-            'Units','centimeters',...
-            'Parent',B.Actions,...
-            'Position',[btn.width,btn.num*btn.height,btn.width*2,btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'String','a');
-btn.num = btn.num-1;
-% plot one series radio button
-B.plotone = uicontrol('Style','pushbutton',...
-            'Units','centimeters',...
-            'Parent',B.Actions,...
-            'Position',[0,btn.num*btn.height,btn.width*3,btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Enable','off',...
-            'String','Plot one series');
-btn.num = btn.num-1;
-% filter array radio button
-B.plotarrayimage = uicontrol('Style','pushbutton',...
-            'Units','centimeters',...
-            'Parent',B.Actions,...
-            'Position',[0,btn.num*btn.height,btn.width,btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Enable','off',...
-            'String','Plot Array Image');
-B.plotaicomp = uicontrol('Style','popupmenu',...
-            'Units','centimeters',...
-            'Parent',B.Actions,...
-            'Position',[btn.width,btn.num*btn.height,btn.width,btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Enable','off',...
-            'String','components');
-B.plotaianalysis = uicontrol('Style','popupmenu',...
-            'Units','centimeters',...
-            'Parent',B.Actions,...
-            'Position',[btn.width*2,btn.num*btn.height,btn.width,btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Enable','off',...
-            'String','analysis');
+B.actfilelabel = uilabel(grid,def.Label,...
+    Text = 'Set active array:');
+B.actfile = uidropdown(grid,def.Dropdown,...
+    Items = {'a'});
+    B.actfile.Layout.Column = [2,3];
+% plot one series push button
+B.plotone = uibutton(grid,def.Button,...
+    Text = 'Plot one series');
+    B.plotone.Layout.Column = [1,3];
+% plot array image button
+B.plotarrayimage = uibutton(grid,def.Button,...
+    Text = 'Plot array image');
+% plot array image component dropdown
+B.plotaicomp = uidropdown(grid,def.Dropdown,...
+    Items = {'components'});
+% plot array image analysis dropdown
+B.plotaianalysis = uidropdown(grid,def.Dropdown,...
+    Items = {'analysis'});
+% filter array push button
+B.filtarray = uibutton(grid,def.Button,...
+    Text = 'Classify data quality:');
+% filter array dropdown
+B.filtanalysis = uidropdown(grid,def.Dropdown,...
+    Items = {'filter analysis'});
+    B.filtanalysis.Layout.Column = [2,3];
 
-btn.num = btn.num-1;
-% filter array radio button
-B.filtarray = uicontrol('Style','pushbutton',...
-            'Units','centimeters',...
-            'Parent',B.Actions,...
-            'Position',[0,btn.num*btn.height,btn.width,btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Enable','off',...
-            'String','Classify data qual.');
-B.filtanalysis = uicontrol('Style','popupmenu',...
-            'Units','centimeters',...
-            'Parent',B.Actions,...
-            'Position',[btn.width,btn.num*btn.height,btn.width*2,btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Enable','off',...
-            'String','analysis');
-
-% ui panel listing all filter array options and parameters
-B.Filter = uipanel('Title','Classify Data Quality Options',...
-            'Units','centimeters',...
-            'FontSize',Fsize,...
-            'BackgroundColor',backcol,...
-            'Position',[axe.xin(3),axe.yi+axe.y+2.4,axe.x+0.1,6.8]);
+%%%% Panel listing all filter array options and parameters
+grid = uigridlayout(P.Filter,[9,3],def.Grid,...
+    RowHeight = repmat({btn.height},[1,9]),...
+    ColumnWidth = {'fit','1x','1x'});
 % make faQC buttons
-btn.num = 8;
-B.faQC = makefaQCbuttons(B.Filter,btn,Fsize);
-
-btn.num = 0;
+B.faQC = makefaQCbuttons(grid,def);
 % recalculate button for filter array
-B.reClassify = uicontrol(plt.id,'Style','pushbutton',...
-            'Parent',B.Filter,...
-            'Units','centimeters',...
-            'Position',[0 btn.num*btn.height btn.width btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'String','Reclassify');
-% manually adjust filter
-B.manualGoodCells = uicontrol(plt.id,'Style','pushbutton',...
-            'Parent',B.Filter,...
-            'Units','centimeters',...
-            'Position',[btn.width btn.num*btn.height btn.width btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'String','Manually Adjust Classes');
+B.reClassify = uibutton(grid,def.Button,...
+    Text = 'Reclassify');
+% manual adjustment button
+B.manualGoodCells = uibutton(grid,def.Button,...
+    Text = 'Manually adjust classifications');
 % save button
-B.saveQC = uicontrol(plt.id,'Style','pushbutton',...
-            'Parent',B.Filter,...
-            'Units','centimeters',...
-            'Position',[btn.width*2 btn.num*btn.height btn.width btn.height],...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'String','Save Classification');
-
+B.saveQC = uibutton(grid,def.Button,...
+    Text = 'Save Classification');
 end
-%%%%%
-function X = Createaxebuttongroup(id,xin,x,y,nx,btn,Fsize);
-% to create xaxis control fields for each axis
-X.panel = uipanel(id,'Title',['x',num2str(nx),'-axis Data'],...
-            'Units','centimeters',...
-            'FontSize',Fsize,...
-            'BackgroundColor','white',...
-            'Position',[xin,y+0.2,x+0.1,2.1]);
-btn.num = 1;
+% create buttons for x-axis variable control
+function X = Createaxebuttongroup(xPanel,def,btn)
+% create grid for panel
+grid = uigridlayout(xPanel,[2,3],def.Grid,...
+    RowHeight = {btn.height,btn.height},...
+    ColumnWidth = {'1x',btn.width,btn.width});
 % variable to be analysed
-X.var = uicontrol(id,'Style','popupmenu',...
-            'Units','centimeters',...
-            'Position',[0 btn.num*btn.height btn.width*2 btn.height],...
-            'Parent',X.panel,...
-            'FontSize',Fsize,...
-            'Enable','off',...
-            'BackgroundColor','w',...
-            'String','dependant variable 1st axis');
+X.var = uidropdown(grid,def.Dropdown,...
+    Items = {'dependent variable(s)'});
 % X axis minimum value editable field
-X.min = uicontrol(id,'Style','edit',...
-            'Units','centimeters',...
-            'Position',[btn.width*2,btn.num*btn.height,btn.width*0.5,btn.height],...
-            'Parent',X.panel,...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Enable','off',...
-            'String','xmin');
+X.min = uieditfield(grid,'numeric',def.Editfield);
 % X axis maximum value editable field
-X.max = uicontrol(id,'Style','edit',...
-            'Units','centimeters',...
-            'Position',[btn.width*2.5,btn.num*btn.height,btn.width*0.5,btn.height],...
-            'Parent',X.panel,...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Enable','off',...
-            'String','xmax');
-btn.num = 0;
+X.max = uieditfield(grid,'numeric',def.Editfield);
 % analysis type
-X.analysis = uicontrol(id,'Style','popupmenu',...
-            'Units','centimeters',...
-            'Position',[0,btn.num*btn.height,btn.width,btn.height],...
-            'Parent',X.panel,...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Enable','off',...
-            'String','sum|mean|std|skew|kurt|box');
+X.analysis = uidropdown(grid,def.Dropdown,...
+    Items = {'sum','mean','std ','skew','kurt','box '});
 % clear axis
-X.clear = uicontrol(id,'Style','pushbutton',...
-            'Units','centimeters',...
-            'Position',[btn.width*2,btn.num*btn.height,btn.width,btn.height],...
-            'Parent',X.panel,...
-            'FontSize',Fsize,...
-            'BackgroundColor','w',...
-            'Enable','off',...
-            'String','clear axis');
+X.clear = uibutton(grid,def.Button,...
+    Text = 'Clear axis');
+    X.clear.Layout.Column = [2,3];
+end
+% initializes the state of all ui elements
+function initializeUIElements(B,P,nxtot)
+    set(P.select,'Visible','on');
+    set(B.replace,'Enable','off');
+    set(P.Actions,'Visible','off');
+    set(P.Filter,'Visible','off');
+    set(P.Y.panel,'Visible','off');
+    for nx = 1:nxtot
+        set(P.X(nx).panel,'Visible','off');
+    end
+end
+% adds the callback functions to each uielement
+function initializeCallbackFunctions(B,axe,nxtot)
+% Select arrays panel
+set(B.selfiledone,'ButtonPushedFcn',@hselfileCallback);
+set(B.replace,'ButtonPushedFcn',@hreplaceCallback);
+
+% Actions panel
+set(B.actfile,'ValueChangedFcn',@hactfileCallback);
+set(B.plotpositions,'ButtonPushedFcn',@hplotpositionsCallback);
+set(B.plotone,'ButtonPushedFcn',@hplotoneCallback);
+set(B.plotarrayimage,'ButtonPushedFcn',@hplotarrayimageCallback);
+set(B.plotaicomp,'ValueChangedFcn',@hplotaicompCallback);
+set(B.plotaianalysis,'ValueChangedFcn',@hplotaianalysisCallback);
+set(B.filtarray,'ButtonPushedFcn',@hfiltarrayCallback);
+set(B.filtanalysis,'ValueChangedFcn',@hfiltanalysisCallback);
+
+% Classify Options panel
+set(B.reClassify,'ButtonPushedFcn',@hreClassifyCallback);
+set(B.manualGoodCells,'ButtonPushedFcn',@hmanualGoodCellsCallback);
+set(axe(:),'ButtonDownFcn',@hAxeClickCallback)
+set(axe(:),'HitTest','off') % turn off axes logic for now
+set(B.saveQC,'ButtonPushedFcn',@hsaveQCCallback);
+
+% y axis callbacks
+set(B.Y.var,'ValueChangedFcn',@hyvarCallback);
+set(B.Y.min,'ValueChangedFcn',@hyminCallback);
+set(B.Y.max,'ValueChangedFcn',@hyminCallback);
+
+% x axis callbacks
+for nx = 1:nxtot
+    set(B.X(nx).var,'ValueChangedFcn',{@hxvarCallback,nx});
+    set(B.X(nx).analysis,'ValueChangedFcn',{@hxanalysisCallback,nx});
+    set(B.X(nx).min,'ValueChangedFcn',{@hxminCallback,nx});
+    set(B.X(nx).max,'ValueChangedFcn',{@hxminCallback,nx});
+    set(B.X(nx).clear,'ButtonPushedFcn',{@hxclearCallback,nx});
+end
 end
