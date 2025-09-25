@@ -40,7 +40,7 @@ if GUIControl.Despike || GUIControl.FiltrBW || GUIControl.SpikeReset
     end
 end
 % open the plotting GUI
-if GUIControl.PlotTimeSeriesGUI
+if GUIControl.plotTimeSeries
     inname = [GUIControl.odir,filesep,GUIControl.MITTdir.name{1}];
     load(inname,'Config','Data')
     % send to subprogram to plot the time series
