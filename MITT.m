@@ -1,4 +1,3 @@
-function MITT
 clear
 clc
 
@@ -13,58 +12,25 @@ clc
 
 %% Create figure/uicontrols
 % create launch GUI figure
-pltLaunch = CreatepltLaunch;
+f = CreateUIFigure;
 
-% create uicontrol buttons in pltLaunch
-[P,hGUIControl,faQC] = makeUIControls(pltLaunch);
+% create uicontrol buttons in f
+f = MakeUIControls(f);
 
-%% initialize panel visibilty
-set(hGUIControl.ChannelType,'Visible','off');
-set(P.SamplingLocations,'Visible','off');
-set(P.Uniform,'Visible','off');
-set(P.NonUniform,'Visible','off');
-set(P.Organize,'Visible','off');
+% initialize panel visibilty
+f = InitializeUI(f);
 
-set(P.SpikeOptions,'Visible','off');
-set(P.FilterOptions,'Visible','off');
-set(P.Clean,'Visible','off');
-
-set(P.Classify,'Visible','off');
-P.faQCOptions.Visible = 'off';
-set(P.Select,'Visible','off');
-set(P.run,'Enable','off');
-
-%% set callback functions for the various uicontrols
-% set the CSVcontrol file names
-set(P.getfile,'ButtonPushedFcn',@hgetfileCallback);
-% Computational block control callbacks
-set(hGUIControl.Organize,'ValueChangedFcn',@hOrganizeCallback);
-set(hGUIControl.Clean,'ValueChangedFcn',@hCleanCallback);
-set(hGUIControl.Classify,'ValueChangedFcn',@hClassifyCallback);
-% Organization block callbacks
-set(hGUIControl.DefineGeometry,'ValueChangedFcn',@hDefineGeometryCallback);
-set(hGUIControl.Sampling,'ValueChangedFcn',@hSamplingCallback);
-set(hGUIControl.getCalcChannelfile,'ButtonPushedFcn',@hgetCalcChannelfileCallback);
-set(hGUIControl.ChannelType,'ValueChangedFcn',@hChannelTypeCallback); 
-set(hGUIControl.ChannelPreset,'ValueChangedFcn',@hChannelPresetCallback);
-set(hGUIControl.Length,'ValueChangedFcn',@hLengthCallback);
-set(hGUIControl.Width,'ValueChangedFcn',@hWidthCallback);
-set(hGUIControl.Depth,'ValueChangedFcn',@hDepthCallback);
-set(hGUIControl.getCalcXYZfile,'ButtonPushedFcn',@hgetCalcXYZfileCallback);
-% Clean block callbacks
-set(hGUIControl.Despike,'ValueChangedFcn',@hDespikeCallback);
-set(hGUIControl.Preprocess,'ValueChangedFcn',@hPreprocessCallback);
-set(hGUIControl.SpikeARMA,'ValueChangedFcn',@hSpikeARMACallback);
-set(P.ARMAopts,'ButtonPushedFcn',@hARMAoptsCallback);
-set(hGUIControl.FiltrBW,'ValueChangedFcn',@hFiltrBWCallback);
-% Run button callback
-set(P.run,'ButtonPushedFcn',@hrunCallback);
+% set callbacks
+f = SetCallbackFunctions(f);
 
 %% Callback functions
 
 %%  File and Message Center
 % to get CSVControl file through a gui window
 function hgetfileCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get the name and path of file
     [CSVControlfilename, CSVControlpathname] = uigetfile({'*.csv';'*.txt'},'Get control text file');
     % set field values equal to name and path of file
@@ -80,18 +46,23 @@ function hgetfileCallback(~, ~, ~)
         % make it
         mkdir(odir);
     end
-
-    % save odir to pltLaunch
-    setappdata(pltLaunch.FigureHandle,'odir',odir)
+    
+    % save odir to the figure
+    f.UserData.odir = odir;
     % change message
     P.message.Value = {'New file selected'};
     % turn on Select button
     P.Select.Visible = 'on';
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 
 %% Computation block control
 % to turn on/off Organization block
 function hOrganizeCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get values of buttons on computational block
     yOrg = hGUIControl.Organize.Value;
     yClean = hGUIControl.Clean.Value;
@@ -121,9 +92,14 @@ function hOrganizeCallback(~, ~, ~)
             P.run.Enable = 'off';
         end
     end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to turn on/off Clean block
 function hCleanCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get values of buttons on computational block
     yOrg = hGUIControl.Organize.Value;
     yClean = hGUIControl.Clean.Value;
@@ -156,9 +132,15 @@ function hCleanCallback(~, ~, ~)
             set(P.run,'Enable','off');
         end
     end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to turn on/off Classify block
 function hClassifyCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+faQC = f.UserData.faQC;
     % get values of buttons on computational block
     yOrg = hGUIControl.Organize.Value;
     yClean = hGUIControl.Clean.Value;
@@ -193,11 +175,17 @@ function hClassifyCallback(~, ~, ~)
             set(P.run,'Enable','off'); % turn Run button off
         end
     end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
+f.UserData.faQC = faQC;
 end
 
 %% Organization Control Panel
 % to control whether geometry is defined as part of organization or not
 function hDefineGeometryCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get checkmark value
     yCheck = get(hGUIControl.DefineGeometry,'Value');
     % if it is checked
@@ -215,11 +203,16 @@ function hDefineGeometryCallback(~, ~, ~)
     end
     hChannelTypeCallback % run logic for default channel type
     hChannelPresetCallback % run logic for default channel preset
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to identify whether a uniform or non-uniform channel was used
 function hChannelTypeCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get checkmark value
-    channelType = get(hGUIControl.ChannelType,'Value');
+    channelType = hGUIControl.ChannelType.Value;
     % if uniform channel
     if strcmp(channelType,'Uniform')
         % turn off nonuniform panel
@@ -234,10 +227,15 @@ function hChannelTypeCallback(~, ~, ~)
         % turn on nonuniform panel
         set(P.NonUniform,'Visible','on');
         set(P.run,'Enable','off');% turn Run button off
-    end            
+    end  
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to set channel values for defined preset(s)
 function hChannelPresetCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     channelPreset = hGUIControl.ChannelPreset.Value;
     vals = DefaultChannels(channelPreset);
     hGUIControl = subSetValues(hGUIControl,vals);
@@ -245,37 +243,57 @@ function hChannelPresetCallback(~, ~, ~)
     hWidthCallback
     hDepthCallback
     hLengthCallback
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % set of fields that gets data about channel geometry
 % to get the length of the test section
 function hLengthCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get length (in m)
     L = hGUIControl.Length.Value;
     % calculate and set default grid spacing (in m)
     l = L/100;
     hGUIControl.Lengthgrid.Value = l;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to get the width of the test section
 function hWidthCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get width (in m)
     B = hGUIControl.Width.Value;
     % calculate and set default grid spacing (in m)
     b = B/100;
     hGUIControl.Widthgrid.Value = b;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to get the depth of the test section
 function hDepthCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get depth (in m)
     H = hGUIControl.Depth.Value;
     % calculate and set default grid spacing (in m)
     h = H/100;
     hGUIControl.Depthgrid.Value = h;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to get a *.csv file of scattered channel geometry or an *.m file that
 % calculates the geometry
 function hgetCalcChannelfileCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get value of listbox
-    ChannelDefinition = get(hGUIControl.ChannelDefinition,'Value');
+    ChannelDefinition = hGUIControl.ChannelDefinition.Value;
     if strcmp(ChannelDefinition,'CSV File')
         % get channel and path name
         [channelname, channelpathname] = uigetfile({'*.csv';'*.txt'},'Get channel geometry *.csv file');
@@ -286,9 +304,14 @@ function hgetCalcChannelfileCallback(~, ~, ~)
     % set channel and path name values to edit fields
     hGUIControl.CalcChannelpathname.Text = channelpathname;
     hGUIControl.CalcChannelfile.Text = channelname;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to control how sampling locations are entered
 function hSamplingCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     yCheck = get(hGUIControl.Sampling,'Value');
     % if custom subprogram is to be used
     if yCheck
@@ -300,10 +323,15 @@ function hSamplingCallback(~, ~, ~)
         % disable window
         set(P.SamplingLocations,'Visible','off');
         set(P.run,'Enable','on');% turn Run button on
-    end            
+    end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to get an *.m program that calculates the sampling location
 function hgetCalcXYZfileCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get the name and path of file
     [xyzname, xyzpathname] = uigetfile({'*.m'},'Get sampling locations subprogram');
     % set field values equal to the name and path
@@ -311,11 +339,18 @@ function hgetCalcXYZfileCallback(~, ~, ~)
     hGUIControl.CalcXYZfile.Text = xyzname;
     % turn on Run button
     set(P.run,'Enable','on');
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 
 %% Clean block Control Panel
 % to ask if despiking will be done
 function hDespikeCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
     % get checkmark value
     yCheck = get(hGUIControl.Despike,'Value');
     if yCheck
@@ -324,10 +359,15 @@ function hDespikeCallback(~, ~, ~)
     else
         % disable spike options popup
         set(P.SpikeOptions,'Visible','off');
-    end            
+    end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to control how preprocessing is done
 function hPreprocessCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     Preprocess = get(hGUIControl.Preprocess,'Value');
     % if doing high pass
     if strcmp(Preprocess,'High Pass')
@@ -339,19 +379,22 @@ function hPreprocessCallback(~, ~, ~)
         % disable window
         set(hGUIControl.HighPassTime,'Visible','off');
         set(P.HighPasstext,'Visible','off');
-    end            
+    end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to ask if SpikeARMA will be run
 function hSpikeARMACallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get check mark value
     yCheck = get(hGUIControl.SpikeARMA,'Value');
     if yCheck
         % enable ARMAopts pushbutton
         set(P.ARMAopts,'Enable','on');
-        % get attached ARMAopts info from the pltLaunch figure 
-        ARMAopts = getappdata(pltLaunch.FigureHandle,'ARMAopts');
         % if there is no attached variable called ARMAopts
-        if isempty(ARMAopts)
+        if ~isfield(f.UserData,'ARMAopts')
             % don't allow the run button to be pushed (would cause an
             % error to try to run without ARMAopts
             set(P.run,'Enable','off');
@@ -361,20 +404,33 @@ function hSpikeARMACallback(~, ~, ~)
         set(P.ARMAopts,'Enable','off');
         % turn on the Run button
         set(P.run,'Enable','on');
-    end            
+    end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to run setARMAopts when the ARMAopts button is pushed
 function hARMAoptsCallback(~, ~, ~)
-    % get the ARMAopts data from the figure (can be empty if
-    % setARMAopts has not been run previously)
-    ARMAopts = getappdata(pltLaunch.FigureHandle,'ARMAopts');
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+    ARMAopts = struct();
+    % get the ARMAopts data from the figure if it exists
+    if isfield(f.UserData,'ARMAopts')
+        ARMAopts = f.UserData.ARMAopts;
+    end
     % run the setARMAopts sub function
-    setARMAopts(ARMAopts,pltLaunch);
+    setARMAopts(ARMAopts,f);
     % turn on the Run button
     set(P.run,'Enable','on');
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
+f.UserData.ARMAopts = ARMAopts;
 end
 % to ask if filtering will be done
 function hFiltrBWCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get check mark value
     yCheck = get(hGUIControl.FiltrBW,'Value');
     if yCheck
@@ -383,22 +439,28 @@ function hFiltrBWCallback(~, ~, ~)
     else
         % disable filter options popup
         set(P.FilterOptions,'Visible','off');
-    end            
+    end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 
 %% Run
 % when Run button is pushed
 function hrunCallback(~, ~, ~)
-    % get GUIControl parameters from buttons (GUIControl)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+faQC = f.UserData.faQC;
+    % get GUIControl parameters from buttons (hGUIControl)
     GUIControl = subGetValues(hGUIControl,[]);
     % get output directory
-    GUIControl.odir = getappdata(pltLaunch.FigureHandle,'odir');
+    GUIControl.odir = f.UserData.odir;
     % set output filename
     GUIControl.outname = [GUIControl.odir,filesep,GUIControl.CSVControlfilename(1:end-4),'_output.mat'];
     % if SpikeARMA is active
     if GUIControl.SpikeARMA
         % get ARMAopts from figure
-        GUIControl.ARMAopts = getappdata(pltLaunch.FigureHandle,'ARMAopts');
+        GUIControl.ARMAopts = f.UserData.ARMAopts;
     end
     
     % Organize data into Config and Data matrices and save one file for each set of simultaneous data
@@ -414,6 +476,7 @@ function hrunCallback(~, ~, ~)
     end
     % files stored in MITTdir
     GUIControl.MITTdir = dir([GUIControl.odir,filesep,'MITT_*.mat']);
+    % store as a table for easier indexing
     GUIControl.MITTdir = struct2table(GUIControl.MITTdir);
 
     % Clean data using the analysis activated in the C structure
@@ -445,37 +508,32 @@ function hrunCallback(~, ~, ~)
             ClassifyArrayGUI(GUIControl,[])
         end
     end
-end
-     
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
+f.UserData.GUIControl = GUIControl;
 end
 
-%%
-% to create the pltLaunch (initial MITT screen) Figure 
-function pltLaunch = CreatepltLaunch 
+%% UI creation functions
+% to create the uifigure (initial MITT screen) 
+function f = CreateUIFigure 
 % this subprogram only includes the figures and axes, not the buttons
-
 % create the figure and set its properties
 f = uifigure();
     f.WindowState = 'maximized';
     f.Name = 'MITT GUI for Data Quality Control';
 nPanels = 3;
 pnl = gobjects(1,3);
-uigl = uigridlayout(f,[1,nPanels]);
-    uigl.BackgroundColor = ([204 108 231])/255; % purple
+grid = uigridlayout(f,[1,nPanels]);
+    grid.BackgroundColor = ([204 108 231])/255; % purple
 for i = 1:nPanels
-    pnl(i) = uipanel(uigl,'Units','normalized');
+    pnl(i) = uipanel(grid,'Units','normalized');
+end
+f.UserData.Panels = pnl;
 end
 
-pltLaunch.FigureHandle = f;
-pltLaunch.PanelHandles = pnl;
-end
-
-%%
 % to create buttons & fields on input control figure
-function [P,GUIControl,faQC] = makeUIControls(pltLaunch)
-f = pltLaunch.FigureHandle;
-pnl = pltLaunch.PanelHandles;
-
+function f = MakeUIControls(f)
+pnl = f.UserData.Panels;
 % defaults across the GUI
 Fsize = 12;
 Fname = 'Calibri';
@@ -885,5 +943,63 @@ faQC = makefaQCbuttons(grid1,def);
 P.run = uibutton(grid,def.Button,...
     Text = 'Run Analysis');
 
+f.UserData.Panels = pnl;
+f.UserData.P = P;
+f.UserData.hGUIControl = GUIControl;
+f.UserData.faQC = faQC;
 end
 
+% initializes all the uipanels to their initial visibility
+function f = InitializeUI(f)
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+    % organize panel
+    hGUIControl.ChannelType.Visible = 'off';
+    P.SamplingLocations.Visible = 'off';
+    P.Uniform.Visible = 'off';
+    P.NonUniform.Visible = 'off';
+    P.Organize.Visible = 'off';
+    % clean panel
+    P.SpikeOptions.Visible = 'off';
+    P.FilterOptions.Visible = 'off';
+    P.Clean.Visible = 'off';
+    % classify panel(s)
+    P.Classify.Visible = 'off';
+    P.faQCOptions.Visible = 'off';
+    P.Select.Visible = 'off';
+    P.run.Enable = 'off';
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
+end
+
+% set callback functions for the various uicontrols
+function f = SetCallbackFunctions(f)
+P = f.UserData.P;
+hGUIControl = f.UserData.hGUIControl;
+    % set the CSVcontrol file names
+    set(P.getfile,'ButtonPushedFcn',@hgetfileCallback);
+    % Computational block control callbacks
+    set(hGUIControl.Organize,'ValueChangedFcn',@hOrganizeCallback);
+    set(hGUIControl.Clean,'ValueChangedFcn',@hCleanCallback);
+    set(hGUIControl.Classify,'ValueChangedFcn',@hClassifyCallback);
+    % Organization block callbacks
+    set(hGUIControl.DefineGeometry,'ValueChangedFcn',@hDefineGeometryCallback);
+    set(hGUIControl.Sampling,'ValueChangedFcn',@hSamplingCallback);
+    set(hGUIControl.getCalcChannelfile,'ButtonPushedFcn',@hgetCalcChannelfileCallback);
+    set(hGUIControl.ChannelType,'ValueChangedFcn',@hChannelTypeCallback); 
+    set(hGUIControl.ChannelPreset,'ValueChangedFcn',@hChannelPresetCallback);
+    set(hGUIControl.Length,'ValueChangedFcn',@hLengthCallback);
+    set(hGUIControl.Width,'ValueChangedFcn',@hWidthCallback);
+    set(hGUIControl.Depth,'ValueChangedFcn',@hDepthCallback);
+    set(hGUIControl.getCalcXYZfile,'ButtonPushedFcn',@hgetCalcXYZfileCallback);
+    % Clean block callbacks
+    set(hGUIControl.Despike,'ValueChangedFcn',@hDespikeCallback);
+    set(hGUIControl.Preprocess,'ValueChangedFcn',@hPreprocessCallback);
+    set(hGUIControl.SpikeARMA,'ValueChangedFcn',@hSpikeARMACallback);
+    set(P.ARMAopts,'ButtonPushedFcn',@hARMAoptsCallback);
+    set(hGUIControl.FiltrBW,'ValueChangedFcn',@hFiltrBWCallback);
+    % Run button callback
+    set(P.run,'ButtonPushedFcn',@hrunCallback);
+f.UserData.P = P;
+f.UserData.hGUIControl = hGUIControl;
+end
