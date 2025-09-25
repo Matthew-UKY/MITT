@@ -1,9 +1,19 @@
-function [oneD,twoD] = InterpUniformChan(Slope,Width,Depth,Length,Sideslope,Widthgrid,Depthgrid,Lengthgrid)
+function [oneD,twoD] = InterpUniformChan(GUIControl)
 % function to calculate water and bed grid for centerline (oneD) and entire
 % section (twoD)
 % only works for trapezoidal, rectangular, and triangular channels
 % Called from OrganizeInput
 % requires use of griddedInterpolant embedded function
+
+% load variables
+Slope = GUIControl.Slope;
+Width = GUIControl.Width;
+Depth = GUIControl.Depth;
+Length = GUIControl.Length;
+Sideslope = GUIControl.Sideslope;
+Widthgrid = GUIControl.Widthgrid;
+Depthgrid = GUIControl.Depthgrid;
+Lengthgrid = GUIControl.Lengthgrid;
 
 % centerline 1D data (common to all channel types)
 xmem = 0:Lengthgrid:Length;

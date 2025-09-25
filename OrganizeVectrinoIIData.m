@@ -5,16 +5,16 @@ function [Data,Config] = OrganizeVectrinoIIData(GUIControl,CSVControl)
 
 %% get Config and Data
 % get filenames
-inname = [GUIControl.CSVControlpathname,CSVControl.filename,'.mat'];
+inname = strcat(GUIControl.CSVControlpathname,CSVControl.filename,'.mat');
 % get Config data from subprogram
-Config = CalcConfigVectrinoII(CSVControl,inname);
+Config = CalcConfigVectrinoII(inname);
 % save component names in Config
 Config.comp = {'u';'v';'w1';'w2'};
-% get all fields in CSVControl and put them in Config
-fnames = fieldnames(CSVControl);
-nftot = length(fnames);
+% get all variables from CSVControl and put them in Config
+vnames = CSVControl.Properties.VariableNames;
+nftot = length(vnames);
 for nf = 1:nftot
-    Config.(fnames{nf}) = CSVControl.(fnames{nf});
+    Config.(vnames{nf}) = CSVControl.(vnames{nf});
 end
 
 % if a sampling locations algorithm was specified
@@ -45,7 +45,7 @@ Config.ntimetot = length(Data.timeStamp);
 
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function Config = CalcConfigVectrinoII(CSVControl,inname)
+function Config = CalcConfigVectrinoII(inname)
 
 Raw = load(inname,'Config');
 

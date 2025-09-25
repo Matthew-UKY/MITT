@@ -6,9 +6,10 @@ function OrganizeInput(GUIControl)
 
 %%
 % get control file
-CSVControl = ConvCSV2Struct([GUIControl.CSVControlpathname,GUIControl.CSVControlfilename],0);
+csvname = [GUIControl.CSVControlpathname,GUIControl.CSVControlfilename];
+CSVControl = ConvCSV2Table(csvname);
 % number of files
-nftot = length(CSVControl);
+nftot = height(CSVControl);
 
 % store output name and number of files
 GUIControl.nftot = nftot;
@@ -29,12 +30,12 @@ end
 % for each file
 for nf = 1:nftot
     % load data by sending Control structure to the instrument-appropriate Organize**Data file
-    OrganizeData = str2func(['Organize',CSVControl(nf).instrument,'Data']);
-    [Data,Config] = OrganizeData(GUIControl,CSVControl(nf));
+    OrganizeData = str2func(['Organize',CSVControl.instrument{nf},'Data']);
+    [Data,Config] = OrganizeData(GUIControl,CSVControl(nf,:));
 
     Config.CSVControlpathname = GUIControl.CSVControlpathname;
     % filename
-    Config.filename = CSVControl(nf).filename;
+    Config.filename = CSVControl.filename{nf};
     % save Config and Data to the output file
     oname = [GUIControl.odir,filesep,'MITT_',Config.filename,'.mat'];
     % chk for any output files

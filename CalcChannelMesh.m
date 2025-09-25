@@ -8,7 +8,7 @@ function GUIControl = CalcChannelMesh(GUIControl,CSVControl)
 % if it is a uniform channel
 if strcmp(GUIControl.ChannelType,'Uniform')
     % send to subprogram
-    [oneD,twoD] = InterpUniformChan(GUIControl.Slope,GUIControl.Width,GUIControl.Depth,GUIControl.Length,GUIControl.Sideslope,GUIControl.Widthgrid,GUIControl.Depthgrid,GUIControl.Lengthgrid);
+    [oneD,twoD] = InterpUniformChan(GUIControl);
 % if it is non-uniform
 else
     % get
@@ -16,7 +16,8 @@ else
         filename1 = [GUIControl.CalcChannelpathname,GUIControl.CalcChannelfile];
         [oneD,twoD] = InterpNonUniformChan(filename1);
     elseif strcmp(GUIControl.ChannelDefinition,'subprogram') % a subprogram has been specified
-        eval(['[oneD,twoD] = ',GUIControl.CalcChannelfile(1:end-2),'(GUIControl,CSVControl);']);
+        CalcChannel = str2func(GUIControl.CalcChannelfile);
+        [oneD,twoD] = CalcChannel(GUIControl,CSVControl);
     end
 end
 
