@@ -1,13 +1,13 @@
 function Data = CleanFilter(Config,Data,GUIControl)
 % controls frequency filtering of time series
-% called from MITT
+% called from CleanSeries
 % subfunctions include ConvStruct2Multi, ConvMulti2Struct, butt3filt
 
 %% initialize variables
 ncomptot = length(Config.comp);
 
 % put all components into a multidimensional array for easy analysis
-if Config.Despiked == 1
+if Config.Despiked
     InData = Data.Despiked;
 else
     InData = Data.Vel;
@@ -22,7 +22,7 @@ for nc = 1:ncomptot
     for nCell = 1:Config.nCells
         dat = MultiData(:,nCell,nc);
         % 3rd order Butterworth filter
-        if GUIControl.ReplacementMethod == 1
+        if strcmp(GUIControl.ReplacementMethod,'linear interpolation')
             Filtered(:,nCell,nc) = butt3filt(dat,Config.Hz);
         end
     end

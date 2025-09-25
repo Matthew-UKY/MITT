@@ -1,6 +1,6 @@
 function Data = CleanSpike(Config,Data,GUIControl)
 % controls detection and removal of spikes from time series
-% called from AClean
+% called from CleanSeries
 % calls SpikeARMA, SpikeStdev, SpikeSkewness, SpikeGoringNikora, SpikeVelCorr
 % subfunctions include ConvStruct2Multi, ConvMulti2Struct, ConvXYZ2Beam
 % modified May 2016 to include SpikeARMA, corrected highpass filter for phase shift
@@ -22,11 +22,11 @@ DespikedHighDat = zeros(size(MultiData));
 
 %% switch to beam if despiking is done in beam
 % if despiking is to be done in Beam coordinates and the transformationMatrix is available
-if GUIControl.switch2beam && isfield(Config, 'transformationMatrix')
+if GUIControl.switch2beam && isfield(Config, 'beam2XYZMatrix')
     % for each Cell
     for nC = 1:Config.nCells
         % reshape the transformation matrix
-        TransMi = reshape(Config.transformationMatrix(nC,:),4,4)';
+        TransMi = reshape(Config.beam2XYZMatrix(nC,:),4,4)';
         % isolate the cell and squeeze it
         Datai = squeeze(MultiData(:,nC,:));
         % convert xyz data to beam
@@ -83,15 +83,16 @@ if ~GUIControl.SpikeARMA
     for ncomp = 1:ncomptot
         % for each cell
         for nC = 1:nCtot
-            % isolate data  % note that 'dat' is cycled through the subprograms so that the spike detection methods
-                % can act in series if multiple options are selected
+            % isolate data  
+            % note that 'dat' is cycled through the subprograms so that the spike detection methods 
+            % can act in series if multiple options are selected
             dat = HighDat(:,nC,ncomp);
             % if data passes the initial screening (mode classification)
             if goodCellsMode(nC,ncomp)
                 % if Standard Deviation spike detection algorithm is activated
                 if GUIControl.SpikeStddev
                     % send to spike detection and replacement algorithm
-                    dat = SpikeStddev(dat,GUIControl.StddevThreshold,GUIControl.ReplacementMethod);
+                    dat = SpikeStddev(dat,Config.Hz,GUIControl.StddevThreshold,GUIControl.ReplacementMethod);
                 end
                 % if Skewness spike detection algorithm is activated
                 if GUIControl.SpikeSkewness
@@ -146,7 +147,7 @@ if GUIControl.SpikeVelCorr
     if ncomptot>1
         % for each cell
         for nC = 1:nCtot
-            % isolate data (all components are required
+            % isolate data (all components are required)
             dat = squeeze(DespikedHighDat(:,nC,:));
             % send to spike detection and replacement algorithm
             dat = SpikeVelCorr(dat,Config.Hz,GUIControl.VelCorrThreshold,GUIControl.ReplacementMethod);
@@ -161,10 +162,10 @@ end
 Despiked = DespikedHighDat+LowDat;
 
 %% switch back to xyz if despiking done in beam
-if GUIControl.switch2beam && isfield(Config, 'transformationMatrix')
+if GUIControl.switch2beam && isfield(Config, 'beam2XYZMatrix')
     for nC = 1:nCtot
         % switch to beam
-        TransMi = reshape(Config.transformationMatrix(nC,:),4,4)';
+        TransMi = reshape(Config.beam2XYZMatrix(nC,:),4,4)';
         Datai = squeeze(Despiked(:,nC,:));
         Despiked(:,nC,:) = ConvXYZ2Beam(Datai,TransMi,2);
         Dataii =  squeeze(HighDat(:,nC,:));

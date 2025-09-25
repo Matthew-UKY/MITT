@@ -7,7 +7,7 @@ function despiked = SpikeVelCorr(raw,Hz,UniMult,ReplacementMethod)
 
 
 %% control parameters
-windowSize = Hz*5; % filtersize window for removal of long term trends
+windowSize = cast(Hz*5,'int64'); % filtersize window for removal of long term trends
 counterlim = 4; % sets the maximum number of spike detection loops
 spikelim = 5;
 
@@ -25,7 +25,7 @@ despiked = zeros(nttot,ncomptot);
 yes = vel;
 % % remove long scale trends
 for ncomp = 1:ncomptot
-    v2(:,ncomp) = filter(ones(1,windowSize)/windowSize,1,raw(:,ncomp));
+    v2(:,ncomp) = filter(ones(1,windowSize,'int64')/windowSize,1,raw(:,ncomp));
     velhighpass(:,ncomp) = raw(:,ncomp)-v2(:,ncomp);
     vel(:,ncomp) = velhighpass(:,ncomp)-median(velhighpass(:,ncomp));
 end
@@ -55,7 +55,7 @@ while spike
         yo = ((UniThresh*stdvel(b)*cos(theta))^2-(UniThresh*stdvel(a)*sin(theta))^2)/(cos(theta)^2-sin(theta)^2);
         
         %General equation of an ellipse.  
-        %General form doens't include the squared. 
+        %General form doesn't include the squared. 
         %Calculating radius of the points along the ellipse - using angles in radians
         r = ((xo^2*yo^2)./(xo^2*(sin(sig)).^2+yo^2*(cos(sig)).^2)).^0.5;
         
@@ -72,8 +72,11 @@ while spike
     end
     %Determines if a spike occurs in any components
     spikeyes = yes(:,1)|yes(:,2)|yes(:,3);
+
     % replace spikes
-    veldespike = SpikeReplace(spikeyes,vel(:,1),ReplacementMethod);
+    for ncomp = 1:ncomptot
+        veldespike(:,ncomp) = SpikeReplace(spikeyes,vel(:,ncomp),ReplacementMethod);
+    end
 
     spike = sum(spikeyes)>spikelim & counter < counterlim; %set limit for iteration at 5 spikes or 5 loops
     counter = counter+1;
@@ -81,15 +84,15 @@ end
 
 % create despiked series and add the mean back into data
 for ncomp = 1:ncomptot
-    v2 = filter(ones(1,windowSize)/windowSize,1,raw(:,ncomp));
-    velhighpass = raw(:,ncomp)-v2;
-    vel(:,ncomp) = velhighpass-median(velhighpass);
+    v2(:,ncomp) = filter(ones(1,windowSize,'int64')/windowSize,1,raw(:,ncomp));
+    velhighpass(:,ncomp) = raw(:,ncomp)-v2(:,ncomp);
+    vel(:,ncomp) = velhighpass(:,ncomp)-median(velhighpass(:,ncomp));
     despiked(:,ncomp) = veldespike(:,ncomp)+median(velhighpass(:,ncomp))+v2(:,ncomp);
 end
 
 end
 
-function yes = inellipse(xDat,yDat,xEllipse,yEllipse);
+function yes = inellipse(xDat,yDat,xEllipse,yEllipse)
 % determines whether positions (xDat,yDat) are in an ellipse 
 
 % intialize output

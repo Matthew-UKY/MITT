@@ -26,8 +26,8 @@ yes = vel;
 % v2 = filter(ones(1,round(windowSize))/round(windowSize),1,velnomean);
 % velhighpass = raw-v2;
 % 
-% % modified as per Wahl, T. L. (2003), Discussion of ‘‘Despiking Acoustic Doppler Velocimeter Data’’ by Derek G. Goring and Vladimir I. Nikora, Journal of Hydraulic Engineering, 129(6), 484-487.
-% % and supported by Goring, D. G., and V. I. Nikora (2003), Closure to ‘‘Depiking Acoustic Doppler Velocimeter Data’’ by Derek G. Goring and Vladimir I. Nikora, Journal of Hydraulic Engineering, 129(6), 487-488.
+% % modified as per Wahl, T. L. (2003), Discussion of â€˜â€˜Despiking Acoustic Doppler Velocimeter Dataâ€™â€™ by Derek G. Goring and Vladimir I. Nikora, Journal of Hydraulic Engineering, 129(6), 484-487.
+% % and supported by Goring, D. G., and V. I. Nikora (2003), Closure to â€˜â€˜Depiking Acoustic Doppler Velocimeter Dataâ€™â€™ by Derek G. Goring and Vladimir I. Nikora, Journal of Hydraulic Engineering, 129(6), 487-488.
 % % use median as location estimator rather than mean
 % velnomedian = velhighpass-median(velhighpass);
 % 
@@ -45,8 +45,8 @@ while spike
 	
 	% step 2 - calculate the standard deviation of the three variables
 	%stdvel = std(vel);
-    % modified as per Wahl, T. L. (2003), Discussion of ‘‘Despiking Acoustic Doppler Velocimeter Data’’ by Derek G. Goring and Vladimir I. Nikora, Journal of Hydraulic Engineering, 129(6), 484-487.
-    % and supported by Goring, D. G., and V. I. Nikora (2003), Closure to ‘‘Depiking Acoustic Doppler Velocimeter Data’’ by Derek G. Goring and Vladimir I. Nikora, Journal of Hydraulic Engineering, 129(6), 487-488.
+    % modified as per Wahl, T. L. (2003), Discussion of â€˜â€˜Despiking Acoustic Doppler Velocimeter Dataâ€™â€™ by Derek G. Goring and Vladimir I. Nikora, Journal of Hydraulic Engineering, 129(6), 484-487.
+    % and supported by Goring, D. G., and V. I. Nikora (2003), Closure to â€˜â€˜Depiking Acoustic Doppler Velocimeter Dataâ€™â€™ by Derek G. Goring and Vladimir I. Nikora, Journal of Hydraulic Engineering, 129(6), 487-488.
     % use median absolute deviation multiplied by an estimator that makes it analogous to the standard deviation (1.483) to make it
     % equivalent to the standard deviation
     for nv = 1:3
@@ -83,6 +83,9 @@ while spike
     end
     %Determines if a spike occurs in the raw, 1st or 2nd derivate data sets
     spikeyes = yes(:,1)|yes(:,2)|yes(:,3);
+    numSpikes = sum(spikeyes);
+    percentDespiked = numSpikes/length(spikeyes);
+    %disp(percentDespiked);
 
     if Parsheh
     %Only spkies of extraneous values are accepted (Parsheh et al 2010)%
