@@ -5,11 +5,6 @@ clc
 % Called from command line
 % Calls OrganizeInput, CleanSeries, ClassifyArrayGUI, ClassifyArrayAuto 
 
-% modifications May 2016 by BM
-% add buttons for SpikeARMA and setARMAopts to allow despiking by this method
-% don't turn off Run button if any of three boxes in Computational Block Control are active
-% more commenting
-
 %% Create figure/uicontrols
 % create launch GUI figure
 f = CreateUIFigure;
