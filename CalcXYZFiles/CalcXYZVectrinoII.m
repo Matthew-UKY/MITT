@@ -1,19 +1,25 @@
 function Config = CalcXYZVectrinoII(Config)
-% determine xyz position of sampled volumes using a Vectrino II
-% this subprogram will likely have to be modified for different
-% experimental setups.  Key measurements can be passed to this function via
-% the Control *.csv file
-% name changed June 2016 by BM from CalcXYZUWFlume because in most cases,
-% this algorithm will be adequate for VectrinoII measurements provided that
-% the position of the probe is included in the Control CSV file.
+% determine xyz position of sampled volumes using lab instruments (ADV and
+% Vectrino Profiler)
+% Key measurements can be passed to this function via the Control *.csv file
 
-% calculate distances from the probe head for all cells
-Config.cellDist = Config.cellStart+ Config.cellInterval*(0:Config.nCells-1);
-% if orientation == 1 the probe was deployed vertically
-if Config.Orientation == 1
-    Config.zpos = Config.zpos-Config.cellDist;
-    Config.xpos = Config.xpos*ones(1,Config.nCells);
-    Config.ypos = Config.ypos*ones(1,Config.nCells);
+% create x,y,z coords for each cell
+nCells = Config.nCells;
+Config.xpos = Config.xpos*ones(1,nCells);
+Config.ypos = Config.ypos*ones(1,nCells);
+Config.zpos = Config.zpos*ones(1,nCells);
+
+% calculate distances from the probe head for all cells for 
+% Vectrino Profiler
+if Config.instrument == "VectrinoII"
+    Config.cellDist = Config.cellStart+ Config.cellInterval*(0:Config.nCells-1);
+    switch Config.Orientation
+        case 1 % default orientation
+            Config.zpos = Config.zpos-Config.cellDist;
+        case 2 % backwards orientation
+            Config.zpos = Config.zpos-Config.cellDist;
+        case 3 % side-looking orientation
+            Config.ypos = Config.ypos-Config.cellDist;
+    end
 end
-
 end
