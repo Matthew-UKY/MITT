@@ -5,7 +5,7 @@ function [Data,Config] = OrganizeVectrinoIIData(GUIControl,CSVControl)
 
 %% get Config and Data
 % get filenames
-inname = strcat(GUIControl.CSVControlpathname,CSVControl.filename,'.mat');
+inname = strcat(GUIControl.CSVControlpathname,filesep,CSVControl.filename{1});
 % get Config data from subprogram
 Config = CalcConfigVectrinoII(inname);
 % save component names in Config
@@ -26,7 +26,7 @@ end
 
 % calculate derived position data
 Config.zZ = Config.zpos/Config.waterDepth;
-Config.waterElevation = Config.bedElevation+Config.waterDepth; %
+Config.waterElevation = Config.bedElevation+Config.waterDepth;
 Config.zposGlobal = Config.bedElevation+Config.zpos;
 
 if isfield(Config,'Y')
@@ -73,13 +73,12 @@ Config.bottom_cellSize = Raw.Config.bottom_cellSize/10000;
 Config.MainBoard_acSerialNo = Raw.Config.MainBoard_acSerialNo;
 Config.MainBoard_Hz = Raw.Config.MainBoard_hFrequency*1000;
 Config.MainBoard_hPICversion = Raw.Config.MainBoard_hPICversion;
-Config.MainBoard_hHWrevision = Raw.Config.MainBoard_hHWrevision;
 Config.MainBoard_hRecSize = Raw.Config.MainBoard_hRecSize;
 Config.MainBoard_cFWversion = Raw.Config.MainBoard_cFWversion;
-%Config.MainBoard_cFWRepoVersion = Raw.Config.MainBoard_cFWRepoVersion;
+Config.MainBoard_cFWRepoVersion = Raw.Config.MainBoard_cFWRepoVersion;
 Config.MainBoard_cFWdate = Raw.Config.MainBoard_cFWdate;
 Config.Probe_acSerialNo = Raw.Config.Probe_acSerialNo;
-%Config.transformationMatrix = Raw.Config.ProbeCalibration_calibrationMatrix;
+Config.transformationMatrix = Raw.Config.ProbeCalibration_calibrationMatrix;
 Config.originalfileName = Raw.Config.fileName;
 Config.startCollectionTime_seconds = Raw.Config.startCollectionTime_seconds;
 Config.startCollectionTime_subseconds = Raw.Config.startCollectionTime_subseconds;

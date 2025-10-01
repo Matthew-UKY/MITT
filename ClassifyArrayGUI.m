@@ -1,11 +1,25 @@
-function ClassifyArrayGUI(GUIControl,selmem)
+function ClassifyArrayGUI(GUIControl,mainP)
 % plots array statistics and interactively identifies bad cells from data array
 % Called from MITT
 % Calls CalcGoodCells, CalcArrayStats
-% input is based on a control.csv file - each file should have passed
-% through the MITT toolbox and have a Dataa and Configa file for each array
 
-%% Create figure
+% Load all the data into one struct, to be passed around to each callback
+nFtot = length(GUIControl.MITTdir.name);
+AllStruct = struct();
+for nF = 1:nFtot
+    mainP.message.Value{end+1} = ['    ',GUIControl.MITTdir.name{nF}];
+    scroll(mainP.message,'bottom')
+    pause(0.01)
+    inname = [GUIControl.odir,filesep,GUIControl.MITTdir.name{nF}];
+    load(inname,'Config','Data');
+    AllStruct(nF).Config = Config;
+    AllStruct(nF).Data = Data;
+end
+mainP.message.Value{end+1} = 'Creating the interactive analysis GUI...';
+scroll(mainP.message,'bottom')
+pause(0.01)
+
+% Create figure
 % create figure, axes, and panels
 [plt,axe,P] = qcFigure;
 nxtot = plt.UserData.nxtot;
@@ -15,26 +29,10 @@ B = qcButtons(P);
 
 % initialize buttons
 initializeUIElements(B,P,nxtot)
+B.selfile.Items = GUIControl.MITTdir.name; % select file listbox
 
 % set callback functions
 initializeCallbackFunctions(B,axe,nxtot)
-
-% if files have been preselected (for example for duplicates)
-if ~isempty(selmem)
-    B.selfile.Items = selmem;
-else
-    B.selfile.Items = GUIControl.MITTdir.name; % select file listbox
-end
-
-% Load all the data into one struct, to be passed around to each callback
-nFtot = length(GUIControl.MITTdir.name);
-AllStruct = struct();
-for nF = 1:nFtot
-    inname = [GUIControl.odir,filesep,GUIControl.MITTdir.name{nF}];
-    load(inname,'Config','Data');
-    AllStruct(nF).Config = Config;
-    AllStruct(nF).Data = Data;
-end
 
 % put everything in UserData, to be passed around to each callback
 UserData = plt.UserData;
@@ -44,6 +42,14 @@ UserData.B = B;
 UserData.GUIControl = GUIControl;
 UserData.AllStruct = AllStruct;
 plt.UserData = UserData;
+
+% select all files and plot. Sets up initial state of the GUI
+plt.UserData.B.selfile.Value = B.selfile.Items;
+hselfileCallback(plt)
+
+mainP.message.Value{end+1} = 'Done';
+scroll(mainP.message,'bottom')
+pause(0.01)
 end
 
 %% Callback functions
@@ -52,10 +58,10 @@ end
 %%%%%
 
 % select file button
-function hselfileCallback(~, ~, ~)
+function hselfileCallback(src, ~, ~)
 % to select files to display in selection list 
 % acts when 'Done' button is pushed on 'Select Arrays' panel
-plt = gcbf;
+plt = ancestor(src,'figure','toplevel');
 B = plt.UserData.B;
 P = plt.UserData.P;
 GUIControl = plt.UserData.GUIControl;
@@ -109,7 +115,7 @@ plt.UserData.allDatanames = allDatanames;
     P.Actions.Visible = 'on';
     P.Filter.Visible = 'on';
     
-    hyvarCallback
+    hyvarCallback(plt)
     Config = SelStruct(1).Config;
     comp = Config.comp;
     for nx = 1:nxtot
@@ -117,7 +123,7 @@ plt.UserData.allDatanames = allDatanames;
         % plot default profiles
         B.X(nx).var.Value = [GUIControl.nxvar,'.',comp{nx}];
         B.X(nx).analysis.Value = 'mean'; % default
-        hxanalysisCallback([],[],nx)
+        hxanalysisCallback(plt,[],nx)
 
         % place the legend on the first axis
         if nx==1 
@@ -127,15 +133,15 @@ plt.UserData.allDatanames = allDatanames;
                 FontSize = 9);
         end
     end
-    hactfileCallback
+    hactfileCallback(plt)
     % set field values from Config data
     B.faQC = subSetValues(B.faQC,Config.faQC);
 end
 % replace button
-function hreplaceCallback(~,~,~)
+function hreplaceCallback(src,~,~)
 % replace files easily, without having to re-enter everything
 % acts when 'Replace' button is pushed on 'Select Arrays' panel
-plt = gcbf;
+plt = ancestor(src,'figure','toplevel');
 B = plt.UserData.B;
 P = plt.UserData.P;
 AllStruct = plt.UserData.AllStruct;
@@ -167,13 +173,13 @@ plt.UserData.SelStruct = SelStruct;
     end
 
     % create new ydata variable
-    hyvarCallback
+    hyvarCallback(plt)
 
     % create new xdata variable
     Config = SelStruct(1).Config;
     for nx = 1:nxtot
         % use previous user-input to find xdata
-        hxanalysisCallback([],[],nx)
+        hxanalysisCallback(plt,[],nx)
 
         % place the legend on the first axis
         if nx==1 
@@ -191,9 +197,9 @@ end
 % y axis panel callbacks
 %%%%%
 % executes when y axis variable is changed
-function hyvarCallback(~, ~, ~)
+function hyvarCallback(src, ~, ~)
 % to get ydata values from SelStruct
-plt = gcbf;
+plt = ancestor(src,'figure','toplevel');
 B = plt.UserData.B;
 SelStruct = plt.UserData.SelStruct;
 nxtot = plt.UserData.nxtot;
@@ -218,9 +224,9 @@ nxtot = plt.UserData.nxtot;
 plt.UserData.ydata = ydata;
 end
 % executes when either y minimum or y maximum editable box is changed
-function hyminCallback(~, ~, ~)
+function hyminCallback(src, ~, ~)
 % to set y axis limits manually
-plt = gcbf;
+plt = ancestor(src,'figure','toplevel');
 axe = plt.UserData.axe;
 B = plt.UserData.B;
 nxtot = plt.UserData.nxtot;
@@ -242,9 +248,9 @@ function hxvarCallback(~, ~, nx)
 
 end
 % executes when analysis is changed on axis nx
-function hxanalysisCallback(~, ~, nx)
+function hxanalysisCallback(src, ~, nx)
 % to plot xdata vs ydata for a given axis
-plt = gcbf;
+plt = ancestor(src,'figure','toplevel');
 B = plt.UserData.B;
 xdata = plt.UserData.xdata;
 ydata = plt.UserData.ydata;
@@ -297,9 +303,9 @@ plt.UserData.xdata = xdata;
 plt.UserData.B = B;
 end
 % executes when either x minimum or x maximum editable box is changed
-function hxminCallback(~, ~, nx)
+function hxminCallback(src, ~, nx)
 % to set x axis limits manually
-plt = gcbf;
+plt = ancestor(src,'figure','toplevel');
 B = plt.UserData.B;
 axe = plt.UserData.axe;
     % get values
@@ -310,9 +316,9 @@ axe = plt.UserData.axe;
 plt.UserData.axe = axe;
 end
 % executes when clear axis button is pushed
-function hxclearCallback(~, ~, nx)
+function hxclearCallback(src, ~, nx)
 % to clear all data and legends from axis
-plt = gcbf;
+plt = ancestor(src,'figure','toplevel');
 axe = plt.UserData.axe;
     % allow axes limits to change automatically
     axe(nx).XLimMode = 'auto';
@@ -324,16 +330,16 @@ end
 % Actions panel
 %%%%%
 % to show positions of probes and sampling volumes within the channel
-function hplotpositionsCallback(~, ~, ~)
+function hplotpositionsCallback(src, ~, ~)
 % retrieve data from figure
-plt = gcbf;
+plt = ancestor(src,'figure','toplevel');
 SelStruct = plt.UserData.SelStruct;
 GUIControl = plt.UserData.GUIControl;
 PlotPositions(SelStruct,GUIControl.outname);
 end
 % to enable filtering and plotting of active file
-function hactfileCallback(~, ~, ~)
-plt = gcbf;
+function hactfileCallback(src, ~, ~)
+plt = ancestor(src,'figure','toplevel');
 B = plt.UserData.B;
 SelStruct = plt.UserData.SelStruct;
     % get values
@@ -348,8 +354,8 @@ SelStruct = plt.UserData.SelStruct;
 plt.UserData.B = B;
 end
 % to plot timeseries from selected data point in profile
-function hplotoneCallback(~, ~, ~)
-plt = gcbf;
+function hplotoneCallback(src, ~, ~)
+plt = ancestor(src,'figure','toplevel');
 ydata = plt.UserData.ydata;
 SelStruct = plt.UserData.SelStruct;
 B = plt.UserData.B;
@@ -366,9 +372,9 @@ B = plt.UserData.B;
     PlotTimeSeries(SelStruct(naF).Config,SelStruct(naF).Data,naP);
 end
 % to turn on filtering panel and load previous filter
-function hplotarrayimageCallback(~, ~, ~)
+function hplotarrayimageCallback(src, ~, ~)
 % acts when 'Classify' button is pushed on 'Options' panel
-plt = gcbf;
+plt = ancestor(src,'figure','toplevel');
 B = plt.UserData.B;
     % enable filtering components dropdown menu
     set(B.plotaicomp,'Enable','on');
@@ -458,7 +464,7 @@ GUIControl = plt.UserData.GUIControl;
     GUIControl.faQC = subGetValues(B.faQC,[]);
     GUIControl.Xvar = aAname;
     GUIControl.Yvar = yvar;
-    GUIControl.resetFilter = 1;
+    GUIControl.resetFilter = true;
     
     % send to subprogram to filter array based on faQC parameters
     Config = CalcGoodCells(SelStruct(naF).Config,SelStruct(naF).Data,GUIControl);

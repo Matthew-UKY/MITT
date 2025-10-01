@@ -1,4 +1,4 @@
-function CleanSeries(GUIControl)
+function CleanSeries(GUIControl,P)
 % Control file for cleaning time series
 % Called from MITT
 % Calls CleanSpike, CleanFilter, and AutoPlotTimeSeries
@@ -9,6 +9,10 @@ ncleantot = length(GUIControl.MITTdir.name);
 % Skip loading/saving if no clean options are checked
 if GUIControl.Despike || GUIControl.FiltrBW || GUIControl.SpikeReset
     for nclean = 1:ncleantot
+        P.message.Value{end+1} = ['    ',GUIControl.MITTdir.name{nclean}];
+        scroll(P.message,'bottom')
+        pause(0.01)
+        
         % get input file name
         inname = [GUIControl.odir,filesep,GUIControl.MITTdir.name{nclean}];
         % load input file

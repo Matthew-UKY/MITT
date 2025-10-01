@@ -11,9 +11,9 @@ function Config = CalcXYZVectrinoII(Config)
 Config.cellDist = Config.cellStart+ Config.cellInterval*(0:Config.nCells-1);
 % if orientation == 1 the probe was deployed vertically
 if Config.Orientation == 1
-    Config.zpos = Config.zpos1-Config.cellDist;
-    Config.xpos = Config.xpos1*ones(1,Config.nCells);
-    Config.ypos = Config.ypos1*ones(1,Config.nCells);
+    Config.zpos = Config.zpos-Config.cellDist;
+    Config.xpos = Config.xpos*ones(1,Config.nCells);
+    Config.ypos = Config.ypos*ones(1,Config.nCells);
 end
 
 end
