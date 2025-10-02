@@ -1,4 +1,4 @@
-function Config = CalcXYZVectrinoII(Config)
+function Config = CalcXYZVectrinoII(Config,Data)
 % determine xyz position of sampled volumes using lab instruments (ADV and
 % Vectrino Profiler)
 % Key measurements can be passed to this function via the Control *.csv file
@@ -9,17 +9,26 @@ Config.xpos = Config.xpos*ones(1,nCells);
 Config.ypos = Config.ypos*ones(1,nCells);
 Config.zpos = Config.zpos*ones(1,nCells);
 
-% calculate distances from the probe head for all cells for 
-% Vectrino Profiler
-if Config.instrument == "VectrinoII"
-    Config.cellDist = Config.cellStart+ Config.cellInterval*(0:Config.nCells-1);
-    switch Config.Orientation
-        case 1 % default orientation
-            Config.zpos = Config.zpos-Config.cellDist;
-        case 2 % backwards orientation
-            Config.zpos = Config.zpos-Config.cellDist;
-        case 3 % side-looking orientation
-            Config.ypos = Config.ypos-Config.cellDist;
-    end
+% cellDist is already calculated by the Vectrino Profiler in Data
+Config.cellDist = Data.cellDist;
+switch Config.Orientation
+    case 0 % Orientation of 0 means use the transformation matrix.
+        if isfield(Config,'transMatrix')
+            % do things
+        else
+            msgbox("Transformation matrix not specified for file: " + Config.filename)
+        end
+    case 1 % 0, default
+        Config.zpos = Config.zpos - Config.cellDist;
+    case 2 % +180z
+        Config.zpos = Config.zpos - Config.cellDist;
+    case 3 % -90x, 180y
+        Config.ypos = Config.ypos - Config.cellDist;
+    case 4 % -90x
+        Config.ypos = Config.ypos - Config.cellDist;
+    case 5 % +90x, 180y
+        Config.ypos = Config.ypos + Config.cellDist;
+    case 6 % +90x
+        Config.ypos = Config.ypos + Config.cellDist;
 end
 end

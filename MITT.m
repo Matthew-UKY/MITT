@@ -37,20 +37,22 @@ P = f.UserData.P;
     end
     % get the path housing the data
     CSVControlpathname = uigetdir(dataPath,'Get data folder');
-    datadir = dir(CSVControlpathname);
-    datadir = struct2table(datadir);
-    datadir = datadir(~datadir.isdir,:);
-    
-    % check for existence of csv control file
-    nFiles = length(datadir.name);
-    fileExtensions = cell(nFiles,1);
-    for i = 1:nFiles
-        temp1 = strsplit(datadir.name{i},'.');
-        fileExtensions{i} = temp1{end};
-    end
     CSVControlfilename = [CSVControlpathname,filesep,'ControlFile.csv'];
     % if default named control file doesn't exist
     if ~isfile(CSVControlfilename)
+        datadir = dir(CSVControlpathname);
+        datadir = struct2table(datadir);
+        datadir = datadir(~datadir.isdir,:);
+        [~,indx] = natsort(datadir.name);
+        datadir = datadir(indx,:);
+        
+        % check for existence of csv files
+        nFiles = length(datadir.name);
+        fileExtensions = cell(nFiles,1);
+        for i = 1:nFiles
+            temp1 = strsplit(datadir.name{i},'.');
+            fileExtensions{i} = temp1{end};
+        end
         % user might have made their own control file (e.g. prev version)
         if any(strcmp(fileExtensions,'csv'))
             temp = uigetfile('*.csv','Select existing Control file',CSVControlpathname);
@@ -61,14 +63,15 @@ P = f.UserData.P;
                 scroll(P.message,'bottom')
                 return
             end
-            CSVControl = sortrows(CSVControl,'filename');
+            [~,indx] = natsort(CSVControl.filename);
+            CSVControl = CSVControl(indx,:);
             writetable(CSVControl,CSVControlfilename)
         % otherwise, user has not made a control file yet
         else
             % fill in control file information that is known up front, e.g.
-            % instrument type (from file extension) and filename
+            % instrument type (from file extension) and filename. zpos is
+            % estimated from the filename, assuming it's written in cm
             CSVControl = DefaultCSVControl(datadir,fileExtensions,CSVControlpathname);
-            CSVControl = sortrows(CSVControl,'filename');
             writetable(CSVControl,CSVControlfilename)
         end
     end
@@ -87,9 +90,9 @@ P = f.UserData.P;
     if isempty(chk1)
         % make it
         mkdir(odir);
-        % add odir to the path
-        addpath(odir)
     end
+    % add odir to the path
+    addpath(odir)
     % save odir to the figure
     f.UserData.odir = odir;
     % start new message chain
@@ -214,15 +217,21 @@ end
 %% Organization Control Panel
 % to edit the csv control file
 function hEditCSVCallback(~,~,~)
+% Known bug for editing the CSV where editing directly from excel screws up
+% the dates. To fix this, could simply store the date as a datenum or
+% unixtime. Annoying.
 f = gcbf;
 hGUIControl = f.UserData.hGUIControl;
 P = f.UserData.P;
     fcsv = figure(WindowState='maximized',...
                   Name='CSV Editing Window');
-    CSVControl = f.UserData.CSVControl;
+    pause(1) % allow figure to open
+    % load csv control from its file location
+    CSVControlpathname = hGUIControl.CSVControlpathname.Text;
+    CSVControlfilename = hGUIControl.CSVControlfilename.Text;
+    CSVControl = readtable([CSVControlpathname,filesep,CSVControlfilename]);
     t = uitable(fcsv,Data=CSVControl);
-    Position = fcsv.Position;
-    t.Position = [0 0 Position(3) Position(4)];
+    t.Position = [0 0 fcsv.Position(3) fcsv.Position(4)];
     t.ColumnEditable = true;
     t.CellEditCallback = @hCellEditCallback;
     t.UserData = f;
@@ -306,6 +315,7 @@ CSVControl = f.UserData.CSVControl;
             datarow = CSVControl(IsCombined,:);
             datarow = datarow(1,:);
             datarow.filename = combinedFilename;
+            datarow.zpos = NumFromString(datarow.filename);
             CSVControl(IsCombined,:) = [];
             CSVControl = [CSVControl;datarow];
             CSVControl = sortrows(CSVControl,'filename');

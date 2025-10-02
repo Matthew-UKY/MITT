@@ -58,7 +58,7 @@ for nf = 1:nftot
         for nc = 1:ncomptot
             Config.goodCells.(Config.comp{nc}) = goodCells;
         end
-        % add variable nums to keep track of what analyses have been completed
+        % add logical values to keep track of what analyses have been completed
         Config.Despiked = false; %
         Config.Filtered = false; %
 

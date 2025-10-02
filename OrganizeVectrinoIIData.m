@@ -17,21 +17,6 @@ for nf = 1:nftot
     Config.(vnames{nf}) = CSVControl.(vnames{nf});
 end
 
-% if a sampling locations algorithm was specified
-if GUIControl.Sampling
-    % get position data using CalcXYZfile
-    CalcXYZfile = str2func(GUIControl.CalcXYZfile(1:end-2)); % rmv .m
-    Config = CalcXYZfile(Config);
-end
-
-% calculate derived position data
-Config.zZ = Config.zpos/Config.waterDepth;
-Config.waterElevation = Config.bedElevation+Config.waterDepth;
-Config.zposGlobal = Config.bedElevation+Config.zpos;
-
-if isfield(Config,'Y')
-    Config.yY = Config.ypos/Config.Y;
-end
 % calculate sampling volume (estimated - difficult to actually calculate
 % according to Nortek
 % assume a cylindrical volume the same diameter as ADV
@@ -42,6 +27,21 @@ Config.samplingVolume = pi()*Config.cellRadius^2*Config.cellWidth;
 Data = GetDataVectrinoII(Config,inname);
 % save additional parameters to Config
 Config.ntimetot = length(Data.timeStamp);
+% if a sampling locations algorithm was specified
+if GUIControl.Sampling
+    % get position data using CalcXYZfile
+    CalcXYZfile = str2func(GUIControl.CalcXYZfile(1:end-2)); % rmv .m
+    Config = CalcXYZfile(Config,Data);
+end
+
+% calculate derived position data
+Config.zZ = Config.zpos/Config.waterDepth;
+Config.waterElevation = Config.bedElevation+Config.waterDepth;
+Config.zposGlobal = Config.bedElevation+Config.zpos;
+
+if isfield(Config,'Y')
+    Config.yY = Config.ypos/Config.Y;
+end
 
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -103,8 +103,8 @@ if Config.coordSystem == 1
 elseif Config.coordSystem == 2
     ntimetot = length(Raw.Data.Profiles_TimeStamp); % added 14/09/12
     nCells=length(Raw.Data.Profiles_Range); % added 14/09/12 
-    Beam = zeros(ntimetot,Config.nCells,4);
-    Ortho = zeros(ntimetot,4,Config.nCells);
+    Beam = zeros(ntimetot,nCells,4);
+    Ortho = zeros(ntimetot,4,nCells);
 
     Beams = {'Beam1','Beam2','Beam3','Beam4'};
     beamVel = strcat("Profiles_Vel",Beams);
@@ -142,6 +142,7 @@ for d=1:ndtot
 end
 
 Data.timeStamp = Raw.Data.Profiles_TimeStamp;
+Data.cellDist = Raw.Data.VelocityHeader_Range;
 
 % If Orientation is specified, just permute the velocities to avoid
 % slowdowns due to unnecessary matrix multiplication. Otherwise, use the
@@ -154,42 +155,44 @@ end
 function Data = OrientVectrinoIIVelocities(Data,Config)
 Orientation = Config.Orientation;
 switch Orientation
-case 0 % Orientation of 0 means use the transformation matrix.
-    if isfield(Config,'transMatrix')
-        Data = TransformVectrinoIIVelocities(Data, Config);
-    else
-        msgbox("Transformation matrix not specified for file: " + Config.filename)
-    end
-% The following rotations are in reference to the positive x-axis,
-% i.e. downstream, using the right-hand rule
-case 1 % No Rotation, Forward-Facing orientation, do nothing
-case 2 % No Rotation, Backward-Facing orientation
-    Data.Vel.u = -1 * Data.Vel.u;
-    Data.Vel.v = -1 * Data.Vel.v;
-case 3 % CW-Rotation, Backward-Facing orientation
-    tData = Data;
-    Data.Vel.u = -1 * tData.Vel.u;
-    Data.Vel.v = (tData.Vel.w1 + tData.Vel.w2)/2;
-    Data.Vel.w1 = tData.Vel.v;
-    Data.Vel.w2 = tData.Vel.v;
-case 4 % CW-Rotation, Forward-Facing orientation
-    tData = Data;
-    Data.Vel.u = tData.Vel.u;
-    Data.Vel.v = (tData.Vel.w1 + tData.Vel.w2)/2;
-    Data.Vel.w1 = -1 * tData.Vel.v;
-    Data.Vel.w2 = -1 * tData.Vel.v;
-case 5 % CCW-Rotation, Backward-Facing orientation
-    tData = Data;
-    Data.Vel.u = -1 * tData.Vel.u;
-    Data.Vel.v = -1 * (tData.Vel.w1 + tData.Vel.w2)/2;
-    Data.Vel.w1 = -1 * tData.Vel.v;
-    Data.Vel.w2 = -1 * tData.Vel.v;
-case 6 % CCW-Rotation, Forward-Facing orientation
-    tData = Data;
-    Data.Vel.u = tData.Vel.u;
-    Data.Vel.v = -1 * (tData.Vel.w1 + tData.Vel.w2)/2;
-    Data.Vel.w1 = tData.Vel.v;
-    Data.Vel.w2 = tData.Vel.v;
+    case 0 % Orientation of 0 means use the transformation matrix.
+        if isfield(Config,'transMatrix')
+            Data = TransformVectrinoIIVelocities(Data, Config);
+        else
+            msgbox("Transformation matrix not specified for file: " + Config.filename)
+        end
+    % The following orientations are in reference to the xyz coordinates
+    % defined for MITT. For instance, a +90x rotation is a 90-degree rotation
+    % Counter-Clockwise about the x-axis. Rotations are assumed to occur from
+    % the default orientation, down-looking facing downstream.
+    case 1 % 0 (default orientation, do nothing)
+    case 2 % +180z
+        Data.Vel.u = -1 * Data.Vel.u;
+        Data.Vel.v = -1 * Data.Vel.v;
+    case 3 % -90x, 180y
+        tData = Data;
+        Data.Vel.u = -1 * tData.Vel.u;
+        Data.Vel.v = (tData.Vel.w1 + tData.Vel.w2)/2;
+        Data.Vel.w1 = tData.Vel.v;
+        Data.Vel.w2 = tData.Vel.v;
+    case 4 % -90x
+        tData = Data;
+        Data.Vel.u = tData.Vel.u;
+        Data.Vel.v = (tData.Vel.w1 + tData.Vel.w2)/2;
+        Data.Vel.w1 = -1 * tData.Vel.v;
+        Data.Vel.w2 = -1 * tData.Vel.v;
+    case 5 % +90x, 180y
+        tData = Data;
+        Data.Vel.u = -1 * tData.Vel.u;
+        Data.Vel.v = -1 * (tData.Vel.w1 + tData.Vel.w2)/2;
+        Data.Vel.w1 = -1 * tData.Vel.v;
+        Data.Vel.w2 = -1 * tData.Vel.v;
+    case 6 % +90x
+        tData = Data;
+        Data.Vel.u = tData.Vel.u;
+        Data.Vel.v = -1 * (tData.Vel.w1 + tData.Vel.w2)/2;
+        Data.Vel.w1 = tData.Vel.v;
+        Data.Vel.w2 = tData.Vel.v;
 end
 end
 
