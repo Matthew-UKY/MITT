@@ -1,25 +1,8 @@
-function ClassifyArrayGUI(GUIControl,mainP)
+function ClassifyArrayGUI(GUIControl,AllStruct)
 % plots array statistics and interactively identifies bad cells from data array
 % Called from MITT
 % Calls CalcGoodCells, CalcArrayStats
 
-% Load all the data into one struct, to be passed around to each callback
-nFtot = length(GUIControl.MITTdir.name);
-AllStruct = struct();
-for nF = 1:nFtot
-    mainP.message.Value{end+1} = ['    ',GUIControl.MITTdir.name{nF}];
-    scroll(mainP.message,'bottom')
-    pause(0.01)
-    inname = [GUIControl.odir,filesep,GUIControl.MITTdir.name{nF}];
-    load(inname,'Config','Data');
-    AllStruct(nF).Config = Config;
-    AllStruct(nF).Data = Data;
-end
-mainP.message.Value{end+1} = 'Creating the interactive analysis GUI...';
-scroll(mainP.message,'bottom')
-pause(0.01)
-
-% Create figure
 % create figure, axes, and panels
 [plt,axe,P] = qcFigure;
 nxtot = plt.UserData.nxtot;
@@ -46,10 +29,6 @@ plt.UserData = UserData;
 % select all files and plot. Sets up initial state of the GUI
 plt.UserData.B.selfile.Value = B.selfile.Items;
 hselfileCallback(plt)
-
-mainP.message.Value{end+1} = 'Done';
-scroll(mainP.message,'bottom')
-pause(0.01)
 end
 
 %% Callback functions

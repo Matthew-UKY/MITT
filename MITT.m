@@ -633,9 +633,13 @@ faQC = f.UserData.faQC;
         scroll(P.message,'bottom')
     end
     % files stored in MITTdir
-    GUIControl.MITTdir = dir([GUIControl.odir,filesep,'MITT_*.mat']);
+    MITTdir = dir([GUIControl.odir,filesep,'MITT_*.mat']);
     % store as a table for easier indexing
-    GUIControl.MITTdir = struct2table(GUIControl.MITTdir);
+    MITTdir = struct2table(MITTdir);
+    % sort in natural file order
+    [~,sortOrder] = natsort(MITTdir.name);
+    MITTdir = MITTdir(sortOrder,:);
+    GUIControl.MITTdir = MITTdir;
 
     % Clean data using the analysis activated in the C structure
     if GUIControl.Clean
@@ -675,12 +679,27 @@ faQC = f.UserData.faQC;
             P.message.Value{end+1} = 'Loading data for interactive analysis GUI';
             scroll(P.message,'bottom')
             pause(0.01)
-            % send to ClassifyArrayGUI subprogram
-            ClassifyArrayGUI(GUIControl,P)
+            % Load all the data into one struct, to be used by the 4 GUI's
+            nFtot = length(GUIControl.MITTdir.name);
+            AllStruct = struct();
+            for nF = 1:nFtot
+                P.message.Value{end+1} = ['    ',GUIControl.MITTdir.name{nF}];
+                scroll(P.message,'bottom')
+                pause(0.01)
+                inname = [GUIControl.odir,filesep,GUIControl.MITTdir.name{nF}];
+                load(inname,'Config','Data');
+                AllStruct(nF).Config = Config;
+                AllStruct(nF).Data = Data;
+            end
             TimeToLoad = toc;
             P.message.Value{end+1} = sprintf('Time to load: %1.3fs',TimeToLoad);
             P.message.Value{end+1} = 'Done';
             scroll(P.message,'bottom')
+            % send to ClassifyArrayGUI subprogram
+            P.message.Value{end+1} = 'Creating the interactive analysis GUI...';
+            scroll(P.message,'bottom')
+            pause(0.01)
+            ClassifyArrayGUI(GUIControl,AllStruct,P)
         end
     end
 f.UserData.hGUIControl = hGUIControl;
@@ -952,8 +971,6 @@ grid2 = uigridlayout(P.Clean,[4,1],def.Grid,...
     RowHeight = repmat({btn.height},[4,1]));
 % reset any existing despiked and/or filtered time series checkbox
 GUIControl.SpikeReset = uicheckbox(grid2,def.Checkbox,Text='Reset despiked and/or filtered time series');
-% plot time series
-GUIControl.plotTimeSeries = uicheckbox(grid2,def.Checkbox,Text='Plot all time series');
 % perform despiking
 GUIControl.Despike = uicheckbox(grid2,def.Checkbox,Text='Despike');
 % perform filtering
@@ -1072,23 +1089,19 @@ GUIControl.FilterMethod = uidropdown(grid2,def.Dropdown,...
 %%%% 3rd panel
 % ui panel listing all filter array options and parameters
 % grid
-grid1 = uigridlayout(grid,[3,1],def.Grid,...
-    RowHeight = {'fit','1x',btn.height});
+grid1 = uigridlayout(grid,[4,1],def.Grid,...
+    RowHeight = {'fit','1x','fit',btn.height});
 
 % sub-panel
 P.Classify = uipanel(grid1,def.Panel, ...
     Title = 'Classify block options');
 % sub-grid
-grid2 = uigridlayout(P.Classify,[4,3],def.Grid,...
-    RowHeight = repmat({btn.height},[4,1]));
+grid2 = uigridlayout(P.Classify,[3,3],def.Grid,...
+    RowHeight = repmat({btn.height},[3,1]));
 % reset classification
 GUIControl.resetFilter = uicheckbox(grid2,def.Checkbox,...
     Text = 'Reset classifications w/ listed parameters');
     GUIControl.resetFilter.Layout.Column = [1,3];
-% use interactive plot or automatic analysis
-GUIControl.plotArray = uicheckbox(grid2,def.Checkbox,...
-    Text = 'Interactive QC GUI (unchecked = auto analysis)');
-    GUIControl.plotArray.Layout.Column = [1,3];
 % plot classification results in new window
 GUIControl.plotQCauto = uicheckbox(grid2,def.Checkbox,...
     Text = 'Plot classification results in tables');
@@ -1114,7 +1127,34 @@ grid2 = uigridlayout(P.faQCOptions,[8,3],...
     Padding = 5);
 % make faQC buttons
 faQC = makefaQCbuttons(grid2,def);
-        
+       
+% Visualization GUI's
+P.Visualize = uipanel(grid1,def.Panel,...
+    Title = 'Visualization GUIs',...
+    FontAngle = 'italic');
+grid2 = uigridlayout(P.Visualize,[1,2],def.Grid,...
+    RowHeight = {125}, ...
+    ColumnWidth = {'1x','1x'});
+% use interactive plot or automatic analysis
+GUIControl.plotArray = uicheckbox(grid2,def.Checkbox,...
+    Text = 'Interactive QC GUI');
+% Create ButtonGroup
+bg = uibuttongroup(grid2,...
+    Title = 'Visualize Data GUI');
+% spectrum GUI
+GUIControl.plotSpectrum = uitogglebutton(bg,def.Button, ...
+    Position = [10 10 125 25],...
+    Text='Create spectrum GUI');
+% time space GUI
+GUIControl.plotTimeSpace = uitogglebutton(bg,def.Button, ...
+    Position = [10 40 125 25],...
+    Text='Create time space GUI');
+% time series GUI
+GUIControl.plotTimeSeries = uitogglebutton(bg,def.Button, ...
+    Text='Create time series GUI',...
+    Position = [10 70 125 25],...
+    Value = true);
+
 % file selection 'Done' pushbutton
 P.run = uibutton(grid1,def.Button,...
     Text = 'Run Analysis');
