@@ -21,7 +21,7 @@ HighDat = zeros(size(MultiData));
 DespikedHighDat = zeros(size(MultiData));
 
 %% switch to beam if despiking is done in beam
-% if despiking is to be done in Beam coordinates and the transformationMatrix is available
+% if despiking is to be done in Beam coordinates and the beam2XYZMatrix is available
 if GUIControl.switch2beam && isfield(Config, 'beam2XYZMatrix')
     % for each Cell
     for nC = 1:Config.nCells

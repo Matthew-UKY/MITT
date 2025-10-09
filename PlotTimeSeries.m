@@ -25,7 +25,25 @@ function f = PlotTimeSeriesControls(f)
 plt = f.UserData;
 Data = plt.AllStruct(1).Data;
 Config = plt.AllStruct(1).Config;
-Acolor = plt.init.AnalysisColors;
+
+    plt.PlotPanel = uipanel(plt.grid,Title='Plotting Controls');
+    plt.PlotPanel.Layout.Column = 3;
+    plt.PlotPanel.Layout.Row = 1;
+    
+    grid = uigridlayout(plt.PlotPanel);
+    grid.RowHeight = {'fit','1x'};
+    grid.ColumnWidth = {'1x'};
+
+    % switch from XYZ to Beam toggleswitch
+    plt.switchCoordinates = uiswitch(grid);
+    plt.switchCoordinates.Items = {'XYZ','Beam'};
+    switch Config.coordSystem % set initial coord-system
+        case 1
+            plt.switchCoordinates.Value = 'XYZ';
+        case 2
+            plt.switchCoordinates.Value = 'Beam';
+    end
+
     nComp = length(Config.comp);
     grid = uigridlayout(plt.AxesPanel,[4,1]);
     grid.ColumnSpacing = 0;
@@ -42,17 +60,16 @@ Acolor = plt.init.AnalysisColors;
             ax(i).Cor = nexttile(t,1,[1,4]);
             ax(i).Cor.NextPlot = 'add';
             ax(i).Cor.XTick = [];
+            ax(i).Cor.YLim = [0,100];
             ax(i).Time = nexttile(t,6,[4,4]);
             ax(i).Time.NextPlot = 'add';
             ax(i).Box = nexttile(t,5,[5,1]);
             ax(i).Box.NextPlot = 'add';
+        else
+            % add code for other instruments
         end
     end
-    plt.ax = ax;
-
-    plt.PlotPanel = uipanel(plt.grid,Title='Plotting Controls');
-    plt.PlotPanel.Layout.Column = 3;
-    plt.PlotPanel.Layout.Row = 1;
+plt.ax = ax;
 f.UserData = plt;
 end
 % initialize the ui
@@ -79,6 +96,8 @@ function f = CreateCallbacks(f)
     plt.DespikedButton.ValueChangedFcn = @DespikedButtonValueChanged;
     plt.FilteredButton.ValueChangedFcn = @FilteredButtonValueChanged;
     plt.CellSpinner.ValueChangedFcn = @CellSpinnerValueChanged;
+
+    plt.switchCoordinates.ValueChangedFcn = @SwitchCoordinatesChanged;
 end
 
 %% plotting functions
@@ -90,6 +109,13 @@ nfile = plt.FilenameListbox.ValueIndex;
 ncell = plt.CellSpinner.Value;
 Data = plt.AllStruct(nfile).Data;
 Config = plt.AllStruct(nfile).Config;
+switch Config.coordSystem
+    case 1
+        originalCoord = 'XYZ';
+    case 2
+        originalCoord = 'Beam';
+end
+newCoord = plt.switchCoordinates.Value;
 init = plt.init;
     comp = Config.comp;
     nComp = length(comp);
@@ -101,6 +127,32 @@ init = plt.init;
     nAnalysis = length(Anames);
 
     time = Data.timeStamp;
+
+    if ~strcmp(originalCoord,newCoord)
+        if isfield(Config, 'beam2XYZMatrix')
+            % reshape the transformation matrix
+            transMatrix = reshape(Config.beam2XYZMatrix(ncell,:),4,4)';
+            % change to other coordinate system
+            for j = 1:nAnalysis
+                raw = Data.(Anames{j});
+                rawMulti = ConvStruct2Multi(raw,Config.comp);
+                rawMulti = squeeze(rawMulti(:,ncell,:));
+                % convert to right coordinates
+                if strcmp(originalCoord,'XYZ')
+                    rawMulti = ConvXYZ2Beam(rawMulti,transMatrix,1);
+                elseif strcmp(originalCoord,'Beam')
+                    rawMulti = ConvXYZ2Beam(rawMulti,transMatrix,2);
+                end
+                for i = 1:nComp
+                    Data.(Anames{j}).(comp{i})(:,ncell) = rawMulti(:,i);
+                end
+            end
+        else
+            plt.coordSystem.Value = originalCoord;
+            msgbox('No beam2XYZ matrix specified!')
+        end
+    end
+
     for i = 1:nComp
         cla(ax(i).Cor)
         cla(ax(i).Time)
@@ -223,6 +275,11 @@ function FilteredButtonValueChanged(src, event)
 end
 % Value changed function: CellSpinner
 function CellSpinnerValueChanged(src, ~)
+    f = ancestor(src,'figure','toplevel');
+    UpdatePlots(f)
+end
+% Value changed function: switchCoordinates
+function SwitchCoordinatesChanged(src,~)
     f = ancestor(src,'figure','toplevel');
     UpdatePlots(f)
 end
