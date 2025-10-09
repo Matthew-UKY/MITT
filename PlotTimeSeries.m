@@ -16,6 +16,9 @@ f = CreateCallbacks(f);
 
 % send to UpdatePlots
 UpdatePlots(f)
+
+f.Name = 'Plot time series GUI';
+f.Visible = 'on';
 end
 
 
@@ -63,8 +66,12 @@ Config = plt.AllStruct(1).Config;
             ax(i).Cor.YLim = [0,100];
             ax(i).Time = nexttile(t,6,[4,4]);
             ax(i).Time.NextPlot = 'add';
+            ax(i).Time.XGrid = 'on';
+            ax(i).Time.YGrid = 'on';
             ax(i).Box = nexttile(t,5,[5,1]);
             ax(i).Box.NextPlot = 'add';
+            ax(i).Box.XGrid = 'on';
+            ax(i).Box.YGrid = 'on';
         else
             % add code for other instruments
         end
