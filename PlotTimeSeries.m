@@ -1,201 +1,228 @@
-function PlotTimeSeries(AllStruct)
-f = createComponents;
+function PlotTimeSeries(AllStruct,init)
 
-% determine number of analyses
-Anames = {'Vel','Despiked','Filtered'};
-yAnalysis = [true,Config.Despiked,Config.Filtered];
-Anames = Anames(yAnalysis);
-leg = Anames; % legend names
-nAtot = length(Anames);
+% create the default figure
+f = VisualizeUIFigure;
+f.UserData.AllStruct = AllStruct;
+f.UserData.init = init;
 
-% determine number of components 
-ncomptot = length(Config.comp);
+% create PlotTimeSeries control panel
+f = PlotTimeSeriesControls(f);
 
-% create a multidimensional array in 4D with rows, columns, sheets and volumes 
-% as time intervals, cells, components, and analyses
-Pdata = zeros(Config.ntimetot,Config.nCells,ncomptot,nAtot);
+% initialize it with user-supplied values
+f = InitializeUI(f);
 
-%% get other analyses and save in Pdata
-% for each analysis
-for nA = 1:nAtot
-    % convert structure to multidimensional array format
-    Pdata(:,:,:,nA) = ConvStruct2Multi(Data.(Anames{nA}),Config.comp);
+% create the callback functions
+f = CreateCallbacks(f);
+
+% send to UpdatePlots
+UpdatePlots(f)
 end
 
-%% get correlation data
-% determine if correlation data is available
-CORy = isfield(Data,'Cor');
-if CORy
-    % create a string with field names
-    compstr = {'Beam1','Beam2','Beam3','Beam4'};
-    COR = ConvStruct2Multi(Data.Cor,compstr);
-else
-    COR = [];
-end
 
-%% send data to plotting algorithm Plot1Series
-% reshape Pdata for plotting
-if length(size(Pdata))==4
-    Pdata = permute(Pdata,[1 4 3 2]); 
-end
-
-% if a list of values were sent in nCellmem, then only those cellnumbers
-% will be plotted, otherwise all cells will be plotted
-if isempty(nCellmem)
-    nCellmem = 1:Config.nCells;
-end
-
-% for each cell
-for nCell = nCellmem
-    % isolate the correct correlation data
-    if ~isempty(COR)
-        CORi = squeeze(COR(:,nCell,:));
-    else
-        CORi = COR;
+%% ui creation functions
+% create controls for plottimeseries
+function f = PlotTimeSeriesControls(f)
+plt = f.UserData;
+Data = plt.AllStruct(1).Data;
+Config = plt.AllStruct(1).Config;
+Acolor = plt.init.AnalysisColors;
+    nComp = length(Config.comp);
+    grid = uigridlayout(plt.AxesPanel,[4,1]);
+    grid.ColumnSpacing = 0;
+    grid.RowSpacing = 0;
+    grid.Padding = 0;
+    ax = struct;
+    for i = 1:nComp
+        p = uipanel(grid);
+        p.BorderType = 'none';
+        t = tiledlayout(p,5,5);
+        t.Padding = 'none';
+        t.TileSpacing = 'tight';
+        if isfield(Data,'Cor')
+            ax(i).Cor = nexttile(t,1,[1,4]);
+            ax(i).Cor.NextPlot = 'add';
+            ax(i).Cor.XTick = [];
+            ax(i).Time = nexttile(t,6,[4,4]);
+            ax(i).Time.NextPlot = 'add';
+            ax(i).Box = nexttile(t,5,[5,1]);
+            ax(i).Box.NextPlot = 'add';
+        end
     end
-    % set title for figure
-    titover = [Config.CSVControlpathname,' ',Config.filename,' nCell = ',num2str(nCell)];
-    % send to Plot1Series
-    Plot1Series(Pdata(:,:,:,nCell),CORi,titover,Config.Hz,Config.comp,leg)
-    % 
-    pause(2);
+    plt.ax = ax;
+
+    plt.PlotPanel = uipanel(plt.grid,Title='Plotting Controls');
+    plt.PlotPanel.Layout.Column = 3;
+    plt.PlotPanel.Layout.Row = 1;
+f.UserData = plt;
 end
-
+% initialize the ui
+function f = InitializeUI(f)
+plt = f.UserData;
+init = plt.init;
+    plt.FilenameListbox.Items = init.FileItems;
+    plt.FilenameListbox.Value = init.FileValue;
+    Bnames = {'VelButton','DespikedButton','FilteredButton'};
+    for i = 1:length(Bnames)
+        plt.(Bnames{i}).Value = init.AnalysisValue(i);
+        plt.(Bnames{i}).Visible = init.AnalysisVisible(i);
+        plt.(Bnames{i}).BackgroundColor = init.AnalysisColors(i,:);
+        plt.(Bnames{i}).FontColor = 'w';
+    end
+    plt.CellSpinner.Limits = [init.CellMin,init.CellMax];
+    plt.CellSpinner.Value = init.CellValue;
 end
-
-% Create UIFigure and components
-function f = createComponents()
-
-    % Create UIFigure and hide until all components are created
-    f = uifigure('Visible', 'off');
-    f.AutoResizeChildren = 'off';
-    colormap(f, 'jet');
-    f.Position = [100 100 640 480];
-    f.Name = 'Default uifigure';
-    f.WindowState = 'maximized';
-
-    % store all ui elements in one struct
-    plt = struct();
-
-    % Create GridLayout
-    plt.grid = uigridlayout(f);
-    plt.grid.ColumnWidth = {100,'1x',100};
-    plt.grid.RowHeight = {'1x'};
-    plt.grid.ColumnSpacing = 0;
-    plt.grid.RowSpacing = 0;
-    plt.grid.Padding = [0 0 0 0];
-    plt.grid.Scrollable = 'on';
-
-    % Create ControlPanel
-    plt.ControlPanel = uipanel(plt.grid);
-    plt.ControlPanel.Title = 'Control Panel';
-    plt.ControlPanel.Layout.Row = 1;
-    plt.ControlPanel.Layout.Column = 1;
-
-    % Create GridLayout2
-    plt.grid2 = uigridlayout(plt.ControlPanel);
-    plt.grid2.ColumnWidth = {75};
-    plt.grid2.RowHeight = {'fit', '1x', 'fit', 25, 25, 25, 'fit', 25};
-    plt.grid2.ColumnSpacing = 5;
-    plt.grid2.RowSpacing = 5;
-    plt.grid2.Padding = [5 5 5 5];
-
-    % Create FilenameLabel
-    plt.FilenameLabel = uilabel(plt.grid2);
-    plt.FilenameLabel.HorizontalAlignment = 'center';
-    plt.FilenameLabel.Layout.Row = 1;
-    plt.FilenameLabel.Layout.Column = 1;
-    plt.FilenameLabel.Text = 'Filename';
-
-    % Create FilenameListbox
-    plt.FilenameListbox = uilistbox(plt.grid2);
-    plt.FilenameListbox.Layout.Row = 2;
-    plt.FilenameListbox.Layout.Column = 1;
+% create callback functions
+function f = CreateCallbacks(f)
+    plt = f.UserData;
     plt.FilenameListbox.ValueChangedFcn = @FilenameValueChanged;
-
-    % Create AnalysisLabel
-    plt.AnalysisLabel = uilabel(plt.grid2);
-    plt.AnalysisLabel.HorizontalAlignment = 'center';
-    plt.AnalysisLabel.Layout.Row = 3;
-    plt.AnalysisLabel.Layout.Column = 1;
-    plt.AnalysisLabel.Text = 'Analysis';
-
-    % Create VelButton
-    plt.VelButton = uibutton(plt.grid2, 'state');
-    plt.VelButton.Text = 'Vel';
-    plt.VelButton.Layout.Row = 4;
-    plt.VelButton.Layout.Column = 1;
     plt.VelButton.ValueChangedFcn = @VelButtonValueChanged;
-
-    % Create DespikedButton
-    plt.DespikedButton = uibutton(plt.grid2, 'state');
-    plt.DespikedButton.Text = 'Despiked';
-    plt.DespikedButton.Layout.Row = 5;
-    plt.DespikedButton.Layout.Column = 1;
     plt.DespikedButton.ValueChangedFcn = @DespikedButtonValueChanged;
-
-    % Create FilteredButton
-    plt.FilteredButton = uibutton(plt.grid2, 'state');
-    plt.FilteredButton.Text = 'Filtered';
-    plt.FilteredButton.Layout.Row = 6;
-    plt.FilteredButton.Layout.Column = 1;
     plt.FilteredButton.ValueChangedFcn = @FilteredButtonValueChanged;
-
-    % Create CellLabel
-    plt.CellLabel = uilabel(plt.grid2);
-    plt.CellLabel.HorizontalAlignment = 'center';
-    plt.CellLabel.Layout.Row = 7;
-    plt.CellLabel.Layout.Column = 1;
-    plt.CellLabel.Text = 'Cell Number';
-
-    % Create CellSpinner
-    plt.CellSpinner = uispinner(plt.grid2);
-    plt.CellSpinner.Layout.Row = 8;
-    plt.CellSpinner.Layout.Column = 1;
     plt.CellSpinner.ValueChangedFcn = @CellSpinnerValueChanged;
+end
 
-    % Create AxesPanel
-    plt.AxesPanel = uipanel(plt.grid);
-    plt.AxesPanel.Layout.Row = 1;
-    plt.AxesPanel.Layout.Column = [2,3];
+%% plotting functions
+% update plots from user input
+function UpdatePlots(f)
+plt = f.UserData;
+ax = plt.ax;
+nfile = plt.FilenameListbox.ValueIndex;
+ncell = plt.CellSpinner.Value;
+Data = plt.AllStruct(nfile).Data;
+Config = plt.AllStruct(nfile).Config;
+init = plt.init;
+    comp = Config.comp;
+    nComp = length(comp);
+    yAnalysis = [true,Config.Despiked,Config.Filtered];
+    Anames = {'Vel','Despiked','Filtered'};
+    Anames = Anames(yAnalysis);
+    Acolor = init.AnalysisColors;
+    Acolor = Acolor(yAnalysis,:);
+    nAnalysis = length(Anames);
 
-    % Show the figure after all components are created
-    f.Visible = 'on';
-
-    % save plt struct in UserData
-    f.UserData = plt;
+    time = Data.timeStamp;
+    for i = 1:nComp
+        cla(ax(i).Cor)
+        cla(ax(i).Time)
+        cla(ax(i).Box)
+        ax(i).Time.ColorOrder = Acolor;
+        ax(i).Box.ColorOrder = Acolor;
+        if isfield(ax,'Cor')
+            beam = strcat('Beam',num2str(i));
+            cor = Data.Cor.(beam)(:,ncell);
+            plot(ax(i).Cor,time,cor,Color=[254,153,0]/255); % orange
+            yline(ax(i).Cor,70,'--k') % 70% correlation threshold
+        end
+        dat = zeros(Config.ntimetot,nAnalysis);
+        xgroup = cell(size(dat));
+        for j = 1:nAnalysis
+            dat(:,j) = Data.(Anames{j}).(comp{i})(:,ncell);
+            xgroup(:,j) = repmat(Anames(j),[length(dat),1]);
+        end
+        p = plot(ax(i).Time,time,dat);
+        dat = dat(:);
+        xgroup = xgroup(:);
+        xgroup = categorical(xgroup,Anames);
+        b = boxchart(ax(i).Box,xgroup,dat,...
+            GroupByColor = xgroup,...
+            JitterOutliers = 'on',...
+            MarkerStyle = '.');
+        for j = 1:nAnalysis
+            p(j).Tag = Anames{j};
+            b(j).Tag = Anames{j};
+        end
+    end
+VelButtonValueChanged(plt.VelButton,plt.VelButton)
+DespikedButtonValueChanged(plt.DespikedButton,plt.DespikedButton)
+FilteredButtonValueChanged(plt.FilteredButton,plt.FilteredButton)
 end
 
 %% Callbacks
 % Value changed function: FilenameListbox
-function FilenameValueChanged(src, event)
-    plt = ancestor(src,'figure','toplevel');
-    value = event.Value;
-    
+function FilenameValueChanged(src, ~)
+    f = ancestor(src,'figure','toplevel');
+    UpdatePlots(f)
 end
-
 % Value changed function: VelButton
 function VelButtonValueChanged(src, event)
-    plt = ancestor(src,'figure','toplevel');
-    value = event.Value;
-    
+    f = ancestor(src,'figure','toplevel');
+    plt = f.UserData;
+    ax = plt.ax;
+    Config = plt.AllStruct(1).Config;
+    Acolor = plt.init.AnalysisColors;
+    val = event.Value;
+    if val
+        src.BackgroundColor = Acolor(1,:);
+    else
+        src.BackgroundColor = 0.8*ones(1,3);
+    end
+    for i = 1:length(Config.comp)
+        lines = get(ax(i).Time,'Children');
+        boxes = get(ax(i).Box,'Children');
+        for j = 1:length(lines)
+            if strcmp(lines(j).Tag,'Vel')
+                lines(j).Visible = val;
+            end
+            if strcmp(boxes(j).Tag,'Vel')
+                boxes(j).Visible = val;
+            end
+        end
+    end
 end
 % Value changed function: DespikedButton
 function DespikedButtonValueChanged(src, event)
-    plt = ancestor(src,'figure','toplevel');
-    value = event.Value;
-    
+    f = ancestor(src,'figure','toplevel');
+    plt = f.UserData;
+    ax = plt.ax;
+    Config = plt.AllStruct(1).Config;
+    Acolor = plt.init.AnalysisColors;
+    val = event.Value;
+    if val
+        src.BackgroundColor = Acolor(2,:);
+    else
+        src.BackgroundColor = 0.8*ones(1,3);
+    end
+    for i = 1:length(Config.comp)
+        lines = get(ax(i).Time,'Children');
+        boxes = get(ax(i).Box,'Children');
+        for j = 1:length(lines)
+            if strcmp(lines(j).Tag,'Despiked')
+                lines(j).Visible = val;
+            end
+            if strcmp(boxes(j).Tag,'Despiked')
+                boxes(j).Visible = val;
+            end
+        end
+    end
 end
 % Value changed function: FilteredButton
 function FilteredButtonValueChanged(src, event)
-    plt = ancestor(src,'figure','toplevel');
-    value = event.Value;
-    
+    f = ancestor(src,'figure','toplevel');
+    plt = f.UserData;
+    ax = plt.ax;
+    Config = plt.AllStruct(1).Config;
+    Acolor = plt.init.AnalysisColors;
+    val = event.Value;
+    if val
+        src.BackgroundColor = Acolor(3,:);
+    else
+        src.BackgroundColor = 0.8*ones(1,3);
+    end
+    for i = 1:length(Config.comp)
+        lines = get(ax(i).Time,'Children');
+        boxes = get(ax(i).Box,'Children');
+        for j = 1:length(lines)
+            if strcmp(lines(j).Tag,'Filtered')
+                lines(j).Visible = val;
+            end
+            if strcmp(boxes(j).Tag,'Filtered')
+                boxes(j).Visible = val;
+            end
+        end
+    end
 end
-
 % Value changed function: CellSpinner
-function CellSpinnerValueChanged(plt, event)
-    plt = ancestor(src,'figure','toplevel');
-    value = event.Value;
-    
+function CellSpinnerValueChanged(src, ~)
+    f = ancestor(src,'figure','toplevel');
+    UpdatePlots(f)
 end

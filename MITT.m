@@ -98,7 +98,7 @@ P = f.UserData.P;
     % start new message chain
     P.message.Value = {'New data path selected'};
     % turn on Select button
-    P.Select.Enable = 'on';
+    P.Select.Visible = 'on';
 f.UserData.CSVControl = CSVControl;
 f.UserData.hGUIControl = hGUIControl;
 f.UserData.P = P;
@@ -190,10 +190,11 @@ faQC = f.UserData.faQC;
         % set default values
         faQC = subSetValues(faQC,faQCdefault);
         % make the panel visible
-        set(P.Classify,'Visible','on');
+        P.Classify.Visible = 'on';
         P.faQCOptions.Visible = 'on';
+        P.Visualize.Visible = 'on';
         % turn Run button on
-        set(P.run,'Enable','on');
+        P.run.Enable = 'on';
         % change message
         P.message.Value{end+1} = 'Classify block ON';
         scroll(P.message,'bottom')
@@ -596,6 +597,16 @@ f.UserData.hGUIControl = hGUIControl;
 f.UserData.P = P;
 end
 
+%% Classify block Control Panel
+% show GUIs for data visualization
+function hVisualizeDataCallback(~,event,~)
+    f = gcbf;
+    hGUIControl = f.UserData.hGUIControl;
+    bg = hGUIControl.plotTimeSeries.Parent;
+    yCheck = event.Value;
+    bg.Visible = yCheck;
+end
+
 %% Run
 % when Run button is pushed
 function hrunCallback(~, ~, ~)
@@ -673,10 +684,10 @@ faQC = f.UserData.faQC;
         P.message.Value{end+1} = 'Done';
         scroll(P.message,'bottom')
         pause(0.01)
-        % if interactive analysis is selected
-        if GUIControl.plotArray
+        % if either GUI checkbox is clicked
+        if GUIControl.plotArray || GUIControl.VisualizeData
             tic
-            P.message.Value{end+1} = 'Loading data for interactive analysis GUI';
+            P.message.Value{end+1} = 'Loading data for GUI...';
             scroll(P.message,'bottom')
             pause(0.01)
             % Load all the data into one struct, to be used by the 4 GUI's
@@ -695,12 +706,43 @@ faQC = f.UserData.faQC;
             P.message.Value{end+1} = sprintf('Time to load: %1.3fs',TimeToLoad);
             P.message.Value{end+1} = 'Done';
             scroll(P.message,'bottom')
-            % send to ClassifyArrayGUI subprogram
-            P.message.Value{end+1} = 'Creating the interactive analysis GUI...';
-            scroll(P.message,'bottom')
-            pause(0.01)
-            ClassifyArrayGUI(GUIControl,AllStruct,P)
+            if GUIControl.plotArray
+                % send to ClassifyArrayGUI subprogram
+                P.message.Value{end+1} = 'Creating the interactive analysis GUI...';
+                scroll(P.message,'bottom')
+                pause(0.01)
+                ClassifyArrayGUI(GUIControl,AllStruct)
+                P.message.Value{end+1} = 'Done';
+                scroll(P.message,'bottom')
+            end
+            if GUIControl.VisualizeData
+                Config = AllStruct(1).Config;
+                Acolor = [0,0,1;
+                          0,1,0;
+                          1,0,0]; % blue, green, red
+                yAnalysis = [true,Config.Despiked,Config.Filtered];
+                def = struct();
+                def.FileItems = GUIControl.MITTdir.name;
+                def.FileValue = GUIControl.MITTdir.name{1};
+                def.AnalysisValue = [true,false,false];
+                def.AnalysisVisible = yAnalysis;
+                def.AnalysisColors = Acolor;
+                def.CellValue = 1;
+                def.CellMin = 1;
+                def.CellMax = Config.nCells;
+                if GUIControl.plotTimeSeries
+                    % send to plotTimeSeries subprogram
+                    PlotTimeSeries(AllStruct,def)
+                elseif GUIControl.plotTimeSpace
+                    % send to plotTimeSpace subprogram
+                    PlotTimeSpace(AllStruct,def)
+                elseif GUIControl.plotSpectrum
+                    % send to plotSpectrum subprogram
+                    PlotSpectrum(AllStruct,def)
+                end
+            end
         end
+
     end
 f.UserData.hGUIControl = hGUIControl;
 f.UserData.P = P;
@@ -1132,15 +1174,21 @@ faQC = makefaQCbuttons(grid2,def);
 P.Visualize = uipanel(grid1,def.Panel,...
     Title = 'Visualization GUIs',...
     FontAngle = 'italic');
-grid2 = uigridlayout(P.Visualize,[1,2],def.Grid,...
-    RowHeight = {125}, ...
+grid2 = uigridlayout(P.Visualize,[2,2],def.Grid,...
+    RowHeight = {65,65}, ...
     ColumnWidth = {'1x','1x'});
 % use interactive plot or automatic analysis
 GUIControl.plotArray = uicheckbox(grid2,def.Checkbox,...
     Text = 'Interactive QC GUI');
+GUIControl.VisualizeData = uicheckbox(grid2,def.Checkbox,...
+    Text = 'Visualize data in GUI');
+    GUIControl.VisualizeData.Layout.Row = 2;
+    GUIControl.VisualizeData.Layout.Column = 1;
 % Create ButtonGroup
 bg = uibuttongroup(grid2,...
     Title = 'Visualize Data GUI');
+    bg.Layout.Row = [1,2];
+    bg.Layout.Column = 2;
 % spectrum GUI
 GUIControl.plotSpectrum = uitogglebutton(bg,def.Button, ...
     Position = [10 10 125 25],...
@@ -1169,6 +1217,7 @@ end
 function f = InitializeUI(f)
 hGUIControl = f.UserData.hGUIControl;
 P = f.UserData.P;
+    P.Select.Visible = 'off';
     % organize panel
     hGUIControl.ChannelType.Visible = 'off';
     P.SamplingLocations.Visible = 'off';
@@ -1183,7 +1232,9 @@ P = f.UserData.P;
     % classify panel(s)
     P.Classify.Visible = 'off';
     P.faQCOptions.Visible = 'off';
-    P.Select.Enable = 'off';
+    bg = hGUIControl.plotTimeSeries.Parent;
+    bg.Visible = 'off';
+    P.Visualize.Visible = 'off';
     P.run.Enable = 'off';
 f.UserData.hGUIControl = hGUIControl;
 f.UserData.P = P;
@@ -1218,6 +1269,8 @@ hGUIControl = f.UserData.hGUIControl;
     set(hGUIControl.SpikeARMA,'ValueChangedFcn',@hSpikeARMACallback);
     set(P.ARMAopts,'ButtonPushedFcn',@hARMAoptsCallback);
     set(hGUIControl.FiltrBW,'ValueChangedFcn',@hFiltrBWCallback);
+    % Classify block callbacks
+    hGUIControl.VisualizeData.ValueChangedFcn = @hVisualizeDataCallback;
     % Run button callback
     set(P.run,'ButtonPushedFcn',@hrunCallback);
 f.UserData.P = P;

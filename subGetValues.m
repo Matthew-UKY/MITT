@@ -14,7 +14,7 @@ for i = 1:nFtot
             case 'uilabel'
                 val.(fnamei) = Struct.(fnamei).Text;
             case 'uibutton'
-                continue % don't need to store anything from buttons
+                val.(fnamei) = Struct.(fnamei).Text;
             otherwise
                 val.(fnamei) = Struct.(fnamei).Value;
         end
