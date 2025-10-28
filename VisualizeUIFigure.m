@@ -1,4 +1,4 @@
-function f = VisualizeUIFigure()
+function f = VisualizeUIFigure
 
     % Create UIFigure and hide until all components are created
     f = uifigure('Visible', 'off');
@@ -34,8 +34,11 @@ function f = VisualizeUIFigure()
     plt.grid2.Padding = [5 5 5 5];
 
     % Create SignalTable
-    pan = uipanel(plt.grid2);
-    plt.SignalTable = uitable(pan);
+    pan = uipanel(plt.grid2,'Title','Signal Info');
+    grid3 = uigridlayout(pan,[1,1],Padding=0,ColumnSpacing=0,RowSpacing=0);
+    plt.SignalTable = uitable(grid3);
+    plt.SignalTable.ColumnWidth = 'auto';
+    plt.SignalTable.ColumnName = [];
 
     % Create FilenameLabel
     plt.FilenameLabel = uilabel(plt.grid2);

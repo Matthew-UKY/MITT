@@ -1,7 +1,8 @@
 function PlotTimeSeries(AllStruct,init)
 
 % create the default figure
-f = VisualizeUIFigure;
+Config = AllStruct(1).Config;
+f = VisualizeUIFigure(Config);
 f.UserData.AllStruct = AllStruct;
 f.UserData.init = init;
 
