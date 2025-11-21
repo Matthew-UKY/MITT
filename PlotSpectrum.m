@@ -1,7 +1,7 @@
 function PlotSpectrum(AllStruct,init)
-%{
+%
 % debug
-
+%
 Config = struct();
 Config.ntimetot = 180000;
 Config.Hz = 100;
@@ -43,6 +43,11 @@ f = PlotSpectrumAxes(f);
 f.UserData.init = init;
 f = InitializeUI(f);
 
+% debug
+%
+f.Visible = true;
+%}
+
 % create and update the line objects for each plot
 CreateLines(f)
 UpdateSpectrumLines(f)
@@ -63,90 +68,152 @@ plt = f.UserData;
     
     bh = 25; % button height
     grid = uigridlayout(plt.SignalPanel);
-    grid.RowHeight = {'fit',bh,'fit',bh,'fit',bh,'fit',bh,'fit',bh,'fit',bh,'fit',bh};
-    grid.ColumnWidth = {'1x','2x','1x'};
-    grid.Padding = 5;
-    grid.RowSpacing = 5;
-    grid.ColumnSpacing = 5;
+    grid.RowHeight = {'fit','fit',bh,'fit',bh,'fit'};
+    grid.ColumnWidth = {'1x'};
+    grid.Padding = 0;
+    grid.RowSpacing = 0;
+    grid.ColumnSpacing = 0;
 
 %   pwelch controls
-    plt.WindowDropdownLabel = uilabel(grid,Text='Window Type');
+    plt.PwelchSubpanel = uipanel(grid,Title='pwelch Parameters');
+    grid1 = uigridlayout(plt.PwelchSubpanel);
+    grid1.RowHeight = {'fit',bh,'fit',bh,'fit',bh};
+    grid1.ColumnWidth = {'1x','2x','1x'};
+    grid1.Padding = 5;
+    grid1.RowSpacing = 5;
+    grid1.ColumnSpacing = 5;
+
+    plt.WindowDropdownLabel = uilabel(grid1,Text='Window Type');
     plt.WindowDropdownLabel.Layout.Row = 1;
     plt.WindowDropdownLabel.Layout.Column = [1,3];
 
-    plt.WindowDropdown = uidropdown(grid);
+    plt.WindowDropdown = uidropdown(grid1);
     plt.WindowDropdown.Layout.Row = 2;
     plt.WindowDropdown.Layout.Column = [1,3];
 
-    plt.WindowEditboxLabel = uilabel(grid,Text='Number of Segments');
+    plt.WindowEditboxLabel = uilabel(grid1,Text='Number of Segments');
     plt.WindowEditboxLabel.Layout.Row = 3;
     plt.WindowEditboxLabel.Layout.Column = [1,3];
 
-    plt.WindowEditbox = uieditfield(grid,'numeric');
+    plt.WindowEditbox = uieditfield(grid1,'numeric');
     plt.WindowEditbox.Layout.Row = 4;
     plt.WindowEditbox.Layout.Column = 3;
 
-    plt.WindowSlider = uislider(grid);
+    plt.WindowSlider = uislider(grid1);
     plt.WindowSlider.Layout.Row = 4;
     plt.WindowSlider.Layout.Column = [1,2];
 
-    plt.NoverlapEditboxLabel = uilabel(grid,Text='Percentage of Overlap');
+    plt.NoverlapEditboxLabel = uilabel(grid1,Text='Percentage of Overlap');
     plt.NoverlapEditboxLabel.Layout.Row = 5;
     plt.NoverlapEditboxLabel.Layout.Column = [1,3];
 
-    plt.NoverlapEditbox = uieditfield(grid,'numeric');
+    plt.NoverlapEditbox = uieditfield(grid1,'numeric');
     plt.NoverlapEditbox.Layout.Row = 6;
     plt.NoverlapEditbox.Layout.Column = 3;
 
-    plt.NoverlapSlider = uislider(grid);
+    plt.NoverlapSlider = uislider(grid1);
     plt.NoverlapSlider.Layout.Row = 6;
     plt.NoverlapSlider.Layout.Column = [1,2];
         
 %   pod controls
-    plt.EnergyPercentageLabel = uilabel(grid,Text='Percentage of signal energy');
-    plt.EnergyPercentageLabel.Layout.Row = 7;
+    plt.PodSubpanel = uipanel(grid,Title='pod Denoising Parameters');
+    grid1 = uigridlayout(plt.PodSubpanel);
+    grid1.RowHeight = {'fit',bh,'fit',bh};
+    grid1.ColumnWidth = {'1x','2x','1x'};
+    grid1.Padding = 5;
+    grid1.RowSpacing = 5;
+    grid1.ColumnSpacing = 5;
+
+    plt.EnergyPercentageLabel = uilabel(grid1,Text='Percentage of signal energy');
+    plt.EnergyPercentageLabel.Layout.Row = 1;
     plt.EnergyPercentageLabel.Layout.Column = [1,3];
 
-    plt.EnergyPercentageEditbox = uieditfield(grid,'numeric');
-    plt.EnergyPercentageEditbox.Layout.Row = 8;
+    plt.EnergyPercentageEditbox = uieditfield(grid1,'numeric');
+    plt.EnergyPercentageEditbox.Layout.Row = 2;
     plt.EnergyPercentageEditbox.Layout.Column = 3;
 
-    plt.EnergyPercentageSlider = uislider(grid);
-    plt.EnergyPercentageSlider.Layout.Row = 8;
+    plt.EnergyPercentageSlider = uislider(grid1);
+    plt.EnergyPercentageSlider.Layout.Row = 2;
     plt.EnergyPercentageSlider.Layout.Column = [1,2];
 
-    plt.PodSizeLabel = uilabel(grid,Text='Change size of POD (row x col)');
-    plt.PodSizeLabel.Layout.Row = 9;
+    plt.PodSizeLabel = uilabel(grid1,Text='Change size of POD (row x col)');
+    plt.PodSizeLabel.Layout.Row = 3;
     plt.PodSizeLabel.Layout.Column = [1,3];
 
-    plt.PodRowEditbox = uieditfield(grid,'numeric');
-    plt.PodRowEditbox.Layout.Row = 10;
+    plt.PodRowEditbox = uieditfield(grid1,'numeric');
+    plt.PodRowEditbox.Layout.Row = 4;
     plt.PodRowEditbox.Layout.Column = 1;
 
-    plt.PodColEditbox = uieditfield(grid,'numeric');
-    plt.PodColEditbox.Layout.Row = 10;
+    plt.PodColEditbox = uieditfield(grid1,'numeric');
+    plt.PodColEditbox.Layout.Row = 4;
     plt.PodColEditbox.Layout.Column = 3;
 
-% slope lines control
-    plt.SlopeLabel = uilabel(grid,Text='Change slope of reference lines');
-    plt.SlopeLabel.Layout.Row = 11;
+% reference line controls
+    plt.ReferenceLineCheckbox = uicheckbox(grid,Text='ON/OFF Reference Lines');
+
+    plt.ReferenceLinesSubpanel = uipanel(grid,Title='Reference Line Parameters');
+    grid1 = uigridlayout(plt.ReferenceLinesSubpanel);
+    grid1.RowHeight = {'fit',bh,'fit',bh};
+    grid1.ColumnWidth = {'1x','2x','1x'};
+    grid1.Padding = 5;
+    grid1.RowSpacing = 5;
+    grid1.ColumnSpacing = 5;
+
+    plt.SlopeLabel = uilabel(grid1,Text='Change slope of reference lines');
+    plt.SlopeLabel.Layout.Row = 1;
     plt.SlopeLabel.Layout.Column = [1,3];
 
-    plt.SlopeEditbox = uieditfield(grid,'numeric');
-    plt.SlopeEditbox.Layout.Row = 12;
+    plt.SlopeEditbox = uieditfield(grid1,'numeric');
+    plt.SlopeEditbox.Layout.Row = 2;
     plt.SlopeEditbox.Layout.Column = 3;
 
-    plt.SlopeSlider = uislider(grid);
-    plt.SlopeSlider.Layout.Row = 12;
+    plt.SlopeSlider = uislider(grid1);
+    plt.SlopeSlider.Layout.Row = 2;
     plt.SlopeSlider.Layout.Column = [1,2];
 
-    plt.TranslateLabel = uilabel(grid,Text='Translate reference lines');
-    plt.TranslateLabel.Layout.Row = 13;
+    plt.TranslateLabel = uilabel(grid1,Text='Translate reference lines');
+    plt.TranslateLabel.Layout.Row = 3;
     plt.TranslateLabel.Layout.Column = [1,3];
 
-    plt.TranslateSlider = uislider(grid);
-    plt.TranslateSlider.Layout.Row = 14;
+    plt.TranslateSlider = uislider(grid1);
+    plt.TranslateSlider.Layout.Row = 4;
     plt.TranslateSlider.Layout.Column = [1,3];
+
+% spectrum smoothing controls
+    plt.SmoothingCheckbox = uicheckbox(grid,Text='ON/OFF Smoothing');
+
+    plt.SmoothingSubpanel = uipanel(grid,Title='Smoothing Parameters');
+    grid1 = uigridlayout(plt.SmoothingSubpanel);
+    grid1.RowHeight = {'fit',bh,'fit',bh};
+    grid1.ColumnWidth = {'1x','2x','1x'};
+    grid1.Padding = 5;
+    grid1.RowSpacing = 5;
+    grid1.ColumnSpacing = 5;
+
+    plt.SmoothWidthLabel = uilabel(grid1,Text='Smoothing width');
+    plt.SmoothWidthLabel.Layout.Row = 1;
+    plt.SmoothWidthLabel.Layout.Column = [1,3];
+
+    plt.SmoothWidthEditbox = uieditfield(grid1,'numeric');
+    plt.SmoothWidthEditbox.Layout.Row = 2;
+    plt.SmoothWidthEditbox.Layout.Column = 3;
+
+    plt.SmoothWidthSlider = uislider(grid1);
+    plt.SmoothWidthSlider.Layout.Row = 2;
+    plt.SmoothWidthSlider.Layout.Column = [1,2];
+
+    plt.SmoothMedianLabel = uilabel(grid1,Text='# of points in moving median');
+    plt.SmoothMedianLabel.Layout.Row = 3;
+    plt.SmoothMedianLabel.Layout.Column = [1,3];
+
+    plt.SmoothMedianEditbox = uieditfield(grid1,'numeric');
+    plt.SmoothMedianEditbox.Layout.Row = 4;
+    plt.SmoothMedianEditbox.Layout.Column = 3;
+
+    plt.SmoothMedianSlider = uislider(grid1);
+    plt.SmoothMedianSlider.Layout.Row = 4;
+    plt.SmoothMedianSlider.Layout.Column = [1,2];
+
 
 f.UserData = plt;
 end
@@ -207,7 +274,7 @@ nComp = length(comp);
             YGrid = 'on',...
             NextPlot = 'add',...
             XScale = 'log',...
-            YScale = 'log');
+            YScale = 'linear');
             xlabel(ax(i).Pre,'Frequency (Hz)')
         if i == 1
             ylabel(ax(i).Psd,'Power Spectral Density (m^2/s^2/Hz)')
@@ -281,6 +348,24 @@ Config = plt.AllStruct(1).Config;
     plt.TranslateSlider.Value = defaultTranslate;
     plt.Slope = plt.SlopeSlider.Value;
     plt.Translate = plt.TranslateSlider.Value;
+% initialize smoothing controls
+    minVal = 0;
+    maxVal = 1;
+    defaultWidth = 0.1;
+    plt.SmoothWidthEditbox.Limits = [minVal,maxVal];
+    plt.SmoothWidthEditbox.Value = defaultWidth;
+    plt.SmoothSlider.Limits = [minVal,maxVal];
+    plt.SmoothSlider.Value = defaultWidth;
+    minVal = 1;
+    maxVal = 51;
+    defaultMedian = 9;
+    plt.SmoothMedianEditbox.Limits = [minVal,maxVal];
+    plt.SmoothMedianEditbox.Value = defaultMedian;
+    plt.SmoothMedianSlider.Limits = [minVal,maxVal];
+    plt.SmoothMedianSlider.Value = defaultMedian;
+    plt.SmoothWidth = defaultWidth;
+    plt.SmoothMedian = defaultMedian;
+
 % initialize data display controls
     signalInfo = GetSignalInfo(Config);
     plt.SignalTable.Data = signalInfo;
@@ -298,7 +383,7 @@ Config = plt.AllStruct(1).Config;
 % initialize y limits
     ax = plt.ax;
     set([ax.Psd],'XLim',[10^-2,Config.Hz],'YLim',[10^-8,10^-1])
-    set([ax.Pre],'XLim',[10^-2,Config.Hz],'YLim',[10^-8,10^-1])
+    set([ax.Pre],'XLim',[10^-2,Config.Hz])
 
 f.UserData = plt;
 end
