@@ -1,7 +1,7 @@
 function PlotSpectrum(AllStruct,init)
 %
 % debug
-%
+%{
 Config = struct();
 Config.ntimetot = 180000;
 Config.Hz = 100;
@@ -28,6 +28,7 @@ init.CellMax = 35;
 %}
 % create the default figure w/ control panel
 f = VisualizeUIFigure;
+f.UserData.init = init;
 
 % create ui-specific controls
 f = PlotSpectrumControls(f);
@@ -40,18 +41,11 @@ f.UserData.AllStruct = AllStruct;
 f = PlotSpectrumAxes(f);
 
 % initialize figure with user-supplied values
-f.UserData.init = init;
 f = InitializeUI(f);
-
-% debug
-%
-f.Visible = true;
-%}
 
 % create and update the line objects for each plot
 CreateLines(f)
 UpdateSpectrumLines(f)
-UpdateReferenceLines(f)
 
 f.Name = 'Plot spectrum GUI';
 f.Visible = 'on';
@@ -190,7 +184,7 @@ plt = f.UserData;
     grid1.RowSpacing = 5;
     grid1.ColumnSpacing = 5;
 
-    plt.SmoothWidthLabel = uilabel(grid1,Text='Smoothing width');
+    plt.SmoothWidthLabel = uilabel(grid1,Text='width of moving window 1');
     plt.SmoothWidthLabel.Layout.Row = 1;
     plt.SmoothWidthLabel.Layout.Column = [1,3];
 
@@ -202,17 +196,17 @@ plt = f.UserData;
     plt.SmoothWidthSlider.Layout.Row = 2;
     plt.SmoothWidthSlider.Layout.Column = [1,2];
 
-    plt.SmoothMedianLabel = uilabel(grid1,Text='# of points in moving median');
-    plt.SmoothMedianLabel.Layout.Row = 3;
-    plt.SmoothMedianLabel.Layout.Column = [1,3];
+    plt.SmoothPointLabel = uilabel(grid1,Text='# of points in moving window 2');
+    plt.SmoothPointLabel.Layout.Row = 3;
+    plt.SmoothPointLabel.Layout.Column = [1,3];
 
-    plt.SmoothMedianEditbox = uieditfield(grid1,'numeric');
-    plt.SmoothMedianEditbox.Layout.Row = 4;
-    plt.SmoothMedianEditbox.Layout.Column = 3;
+    plt.SmoothPointEditbox = uieditfield(grid1,'numeric');
+    plt.SmoothPointEditbox.Layout.Row = 4;
+    plt.SmoothPointEditbox.Layout.Column = 3;
 
-    plt.SmoothMedianSlider = uislider(grid1);
-    plt.SmoothMedianSlider.Layout.Row = 4;
-    plt.SmoothMedianSlider.Layout.Column = [1,2];
+    plt.SmoothPointSlider = uislider(grid1);
+    plt.SmoothPointSlider.Layout.Row = 4;
+    plt.SmoothPointSlider.Layout.Column = [1,2];
 
 
 f.UserData = plt;
@@ -235,15 +229,20 @@ plt = f.UserData;
     plt.EnergyPercentageSlider.ValueChangingFcn = @EnergyPercentageSliderValueChanging;
     plt.PodRowEditbox.ValueChangedFcn = @PodRowEditboxValueChanged;
     plt.PodColEditbox.ValueChangedFcn = @PodColEditboxValueChanged;
+% smoothing callbacks
+    plt.SmoothWidthEditbox.ValueChangedFcn = @SmoothWidthEditboxValueChanged;
+    plt.SmoothWidthSlider.ValueChangedFcn = @SmoothWidthSliderValueChanged;
+    plt.SmoothPointEditbox.ValueChangedFcn = @SmoothPointEditboxValueChanged;
+    plt.SmoothPointSlider.ValueChangedFcn = @SmoothPointSliderValueChanged;
 % reference line callbacks
     plt.SlopeEditbox.ValueChangedFcn = @SlopeEditboxValueChanged;
     plt.SlopeSlider.ValueChangingFcn = @SlopeSliderValueChanging;
     plt.TranslateSlider.ValueChangingFcn = @TranslateSliderValueChanging;
 % data callbacks
     plt.FilenameListbox.ValueChangedFcn = @FilenameValueChanged;
-    plt.VelButton.ValueChangedFcn = @VelButtonValueChanged;
-    plt.DespikedButton.ValueChangedFcn = @DespikedButtonValueChanged;
-    plt.FilteredButton.ValueChangedFcn = @FilteredButtonValueChanged;
+    plt.VelButton.ValueChangedFcn = @AnalysisButtonValueChanged;
+    plt.DespikedButton.ValueChangedFcn = @AnalysisButtonValueChanged;
+    plt.FilteredButton.ValueChangedFcn = @AnalysisButtonValueChanged;
     plt.CellSpinner.ValueChangedFcn = @CellSpinnerValueChanged;
 
 f.UserData = plt;
@@ -334,7 +333,7 @@ Config = plt.AllStruct(1).Config;
 % initialize reference line controls
     minVal = -10;
     maxVal = 0;
-    defaultSlope = -1;
+    defaultSlope = -5/3;
     plt.SlopeEditbox.Limits = [minVal,maxVal];
     plt.SlopeEditbox.Value = defaultSlope;
     plt.SlopeSlider.Limits = [minVal,maxVal];
@@ -346,25 +345,21 @@ Config = plt.AllStruct(1).Config;
     plt.TranslateSlider.MajorTicks = [];
     plt.TranslateSlider.MinorTicks = [];
     plt.TranslateSlider.Value = defaultTranslate;
-    plt.Slope = plt.SlopeSlider.Value;
-    plt.Translate = plt.TranslateSlider.Value;
 % initialize smoothing controls
     minVal = 0;
     maxVal = 1;
-    defaultWidth = 0.1;
+    defaultWidth = 0.138; % optimal from external testing
     plt.SmoothWidthEditbox.Limits = [minVal,maxVal];
     plt.SmoothWidthEditbox.Value = defaultWidth;
-    plt.SmoothSlider.Limits = [minVal,maxVal];
-    plt.SmoothSlider.Value = defaultWidth;
+    plt.SmoothWidthSlider.Limits = [minVal,maxVal];
+    plt.SmoothWidthSlider.Value = defaultWidth;
     minVal = 1;
     maxVal = 51;
-    defaultMedian = 9;
-    plt.SmoothMedianEditbox.Limits = [minVal,maxVal];
-    plt.SmoothMedianEditbox.Value = defaultMedian;
-    plt.SmoothMedianSlider.Limits = [minVal,maxVal];
-    plt.SmoothMedianSlider.Value = defaultMedian;
-    plt.SmoothWidth = defaultWidth;
-    plt.SmoothMedian = defaultMedian;
+    defaultPoints = 7; % optimal from external testing
+    plt.SmoothPointEditbox.Limits = [minVal,maxVal];
+    plt.SmoothPointEditbox.Value = defaultPoints;
+    plt.SmoothPointSlider.Limits = [minVal,maxVal];
+    plt.SmoothPointSlider.Value = defaultPoints;
 
 % initialize data display controls
     signalInfo = GetSignalInfo(Config);
@@ -380,10 +375,34 @@ Config = plt.AllStruct(1).Config;
     end
     plt.CellSpinner.Limits = [init.CellMin,init.CellMax];
     plt.CellSpinner.Value = init.CellValue;
-% initialize y limits
+% initialize x limits
     ax = plt.ax;
-    set([ax.Psd],'XLim',[10^-2,Config.Hz],'YLim',[10^-8,10^-1])
+    set([ax.Psd],'XLim',[10^-2,Config.Hz])
     set([ax.Pre],'XLim',[10^-2,Config.Hz])
+
+% initialize the inputs to plotting functions
+    Input = struct();
+
+    Input.Spectrum = struct();
+    Input.Spectrum.winType = plt.WindowDropdown.Value;
+    Input.Spectrum.nSegments = plt.WindowEditbox.Value;
+    Input.Spectrum.overlapPercentage = plt.NoverlapEditbox.Value;
+    Input.Spectrum.N = Config.ntimetot;
+    Input.Spectrum.energyPercentage = plt.EnergyPercentageEditbox.Value;
+    Input.Spectrum.nRows = plt.PodRowEditbox.Value;
+    Input.Spectrum.nCols = plt.PodColEditbox.Value;
+
+    Input.Smooth = struct();
+    Input.Smooth.pointMethod = 'movmedian'; % add dropdown
+    Input.Smooth.nPoints = plt.SmoothPointEditbox.Value;
+    Input.Smooth.widthMethod = 'gaussian'; % add dropdown
+    Input.Smooth.percentWidth = plt.SmoothWidthEditbox.Value;
+
+    Input.Reflines = struct();
+    Input.Reflines.slope = plt.SlopeEditbox.Value;
+    Input.Reflines.translate = plt.TranslateSlider.Value;
+
+    plt.Input = Input;
 
 f.UserData = plt;
 end
@@ -407,29 +426,39 @@ init = plt.init;
     SpectrumLines.Psd = gobjects(nComp,nAnalysis);
     SpectrumLines.Pre = gobjects(nComp,nAnalysis);
 
-    % slope reference lines
+    % slope reference line struct
     ReferenceLines = struct();
     lineDensity = 9; % number of lines to show on screen
     expansionCoeff = 0.5; % to prevent cutoff of lines as they rotate
     nRef = round(lineDensity*(1+expansionCoeff)-1);
     ReferenceLines.Psd = gobjects(nComp,nRef);
     ReferenceLines.Pre = gobjects(nComp,nRef);
+    ReferenceLines.LineDensity = lineDensity;
+    ReferenceLines.ExpansionCoefficient = expansionCoeff;
+
+    % smoothed lines
+    SmoothLines = struct();
+    SmoothLines.Psd = gobjects(nComp,nAnalysis);
+    SmoothLines.Pre = gobjects(nComp,nAnalysis);
+
     for i = 1:nComp
         for j = 1:nAnalysis
             % plot dummy lines as containers for spectrum data
             SpectrumLines.Psd(i,j) = plot(ax(i).Psd,1,1);
             SpectrumLines.Pre(i,j) = plot(ax(i).Pre,1,1);
+            % dummy lines for smoothed spectra
+            SmoothLines.Psd(i,j) = plot(ax(i).Psd,[1,1],[1,1],'-k');
+            SmoothLines.Pre(i,j) = plot(ax(i).Pre,[1,1],[1,1],'-k');
         end
         for k = 1:nRef
-            % plot dummy lines as containers for reference line data
+            % dummy lines for reference line data
             ReferenceLines.Psd(i,k) = plot(ax(i).Psd,[1,1],[1,1],'--',Color=0.8*ones(1,3));
             ReferenceLines.Pre(i,k) = plot(ax(i).Pre,[1,1],[1,1],'--',Color=0.8*ones(1,3));
         end
     end
-    ReferenceLines.LineDensity = lineDensity;
-    ReferenceLines.ExpansionCoefficient = expansionCoeff;
 
 plt.SpectrumLines = SpectrumLines;
+plt.SmoothLines = SmoothLines;
 plt.ReferenceLines = ReferenceLines;
 f.UserData = plt;
 end
@@ -444,7 +473,9 @@ ncell = plt.CellSpinner.Value;
 Data = plt.AllStruct(nfile).Data;
 Config = plt.AllStruct(nfile).Config;
 SpectrumLines = plt.SpectrumLines;
-Acolor = plt.init.AnalysisColors;
+SmoothLines = plt.SmoothLines;
+spectrumInputs = plt.Input.Spectrum;
+smoothingInputs = plt.Input.Smooth;
 
 % config variables
     comp = Config.comp;
@@ -452,53 +483,58 @@ Acolor = plt.init.AnalysisColors;
     yAnalysis = [true,Config.Despiked,Config.Filtered];
     Anames = {'Vel','Despiked','Filtered'};
     Anames = Anames(yAnalysis);
+    Acolor = plt.init.AnalysisColors;
     nAnalysis = length(Anames);
-
-% gathering user input from the spectrum controls
-    userInput = struct();
-    userInput.winType = plt.WindowDropdown.Value;
-    userInput.nSegments = plt.WindowEditbox.Value;
-    userInput.overlapPercentage = plt.NoverlapEditbox.Value;
-    userInput.N = Config.ntimetot;
-    userInput.energyPercentage = plt.EnergyPercentageEditbox.Value;
-    userInput.nRows = plt.PodRowEditbox.Value;
-    userInput.nCols = plt.PodColEditbox.Value;
+    blackshift = 2;
+    smoothColor = Acolor/blackshift;
 
 % inputs to the pwelch function
     fs = Config.Hz;
-    window = CreateWindow(userInput);
-    noverlap = CreateNoverlap(userInput);
+    window = CreateWindow(spectrumInputs);
+    noverlap = CreateNoverlap(spectrumInputs);
 
     oldPxxLength = length(SpectrumLines.Psd(1,1).XData);
     for i = 1:nComp
         for j = 1:nAnalysis
             % use POD/pwelch to create a denoised spectrum of the data
             signal = Data.(Anames{j}).(comp{i})(:,ncell);
-            signal = PodDenoiseSignal(signal,userInput);
+            signal = PodDenoiseSignal(signal,spectrumInputs);
             [pxx,freq] = pwelch(signal,window,noverlap,[],fs);
+            premult = freq .* pxx;
+            smoothPxx = SmoothSignal(pxx,freq,smoothingInputs);
+            smoothPremult = freq .* smoothPxx;
             newPxxLength = length(pxx);
             if newPxxLength ~= oldPxxLength
                 delete(SpectrumLines.Psd(i,j))
                 delete(SpectrumLines.Pre(i,j))
+                delete(SmoothLines.Psd(i,j))
+                delete(SmoothLines.Pre(i,j))
                 SpectrumLines.Psd(i,j) = plot(ax(i).Psd,freq,pxx,Color=Acolor(j,:));
-                SpectrumLines.Pre(i,j) = plot(ax(i).Pre,freq,freq.*pxx,Color=Acolor(j,:));
+                SpectrumLines.Pre(i,j) = plot(ax(i).Pre,freq,premult,Color=Acolor(j,:));
+                SmoothLines.Psd(i,j) = plot(ax(i).Psd,freq,smoothPxx,Color=smoothColor(j,:));
+                SmoothLines.Pre(i,j) = plot(ax(i).Pre,freq,smoothPremult,Color=smoothColor(j,:));
             else
                 SpectrumLines.Psd(i,j).XData = freq;
                 SpectrumLines.Psd(i,j).YData = pxx;
                 SpectrumLines.Pre(i,j).XData = freq;
-                SpectrumLines.Pre(i,j).YData = freq.*pxx;
+                SpectrumLines.Pre(i,j).YData = premult;
+                SmoothLines.Psd(i,j).XData = freq;
+                SmoothLines.Psd(i,j).YData = smoothPxx;
+                SmoothLines.Pre(i,j).XData = freq;
+                SmoothLines.Pre(i,j).YData = smoothPremult;
             end
-
         end
     end
 % save data to figure
 plt.SpectrumLines = SpectrumLines;
+plt.SmoothLines = SmoothLines;
 f.UserData = plt;
 
 % update the visibility of lines
-VelButtonValueChanged(f)
-DespikedButtonValueChanged(f)
-FilteredButtonValueChanged(f)
+AnalysisButtonValueChanged(f)
+
+% update the reference lines to match new y limits
+UpdateReferenceLines(f)
 end
 % smoothly update the reference lines
 function UpdateReferenceLines(f)
@@ -507,19 +543,20 @@ ax = plt.ax;
 Config = plt.AllStruct(1).Config;
 comp = Config.comp;
 nComp = length(comp);
-slope = plt.Slope;
-translate = plt.Translate;
 ReferenceLines = plt.ReferenceLines;
+Input = plt.Input;
+slope = Input.Reflines.slope;
+translate = Input.Reflines.translate;
 nRef = length(ReferenceLines.Psd);
 expansionCoeff = ReferenceLines.ExpansionCoefficient;
 
-graphType = {'Psd','Pre'};
+graphTypes = {'Psd','Pre'};
 slope = [slope,slope+1];
-for i = 1:length(graphType)
-    xlim = ax(1).(graphType{i}).XLim;
+for i = 1:length(graphTypes)
+    xlim = ax(1).(graphTypes{i}).XLim;
     xdata(1) = xlim(1)/(xlim(2)/xlim(1))^(expansionCoeff/2);
     xdata(2) = xlim(2)*(xlim(2)/xlim(1))^(expansionCoeff/2);
-    ylim = ax(1).(graphType{i}).YLim;
+    ylim = ax(1).(graphTypes{i}).YLim;
     ydata(1) = ylim(1)/(ylim(2)/ylim(1))^(expansionCoeff/2);
     ydata(2) = ylim(2)*(ylim(2)/ylim(1))^(expansionCoeff/2);
     lineSpacing = linspace(log10(ydata(1)),log10(ydata(2)),nRef);
@@ -527,7 +564,7 @@ for i = 1:length(graphType)
     y0 = mean(ylim);
     for j = 1:nComp
         for k = 1:nRef
-            line = ReferenceLines.(graphType{i})(j,k);
+            line = ReferenceLines.(graphTypes{i})(j,k);
             line.XData = xdata;
             ydata = y0*(xdata/x0).^slope(i) * 10^(lineSpacing(k)*sqrt(1+slope(i)^2));
             ydata = ydata * 10^translate; % translate up and down
@@ -598,34 +635,57 @@ S(1:indx,1:indx) = temp(1:indx,1:indx);
 signal = U * S * V';
 signal = reshape(signal,rows*cols,1);
 end
-% smooth the signal in logspace and then go back to linspace
-function smooth = SmoothSignal(ydata,xdata,percentWidth)
-% go to logspace
+% smooth the signal in logscale and then go back to linscale
+function ydataSmooth = SmoothSignal(ydata,xdata,userInput)
+% go to logscale
 logX = log10(xdata);
 logY = log10(ydata);
-% remove any infinities
-yNaN = isinf(logX) | isinf(logY);
-logX = logX(~yNaN);
-logY = logY(~yNaN);
-% smooth using moving window of a certain width
-method = 'gaussian';
-nPoints = 20;
-windowWidth = (percentWidth/100)*range(logY);
-smooth = smoothdata(logY,method,windowWidth,SamplePoints=logX);
-smooth = smoothdata(smooth,method,nPoints);
-% return to linspace
-smooth = 10.^smooth;
-% restore smooth to length of o.g. signal
-temp = smooth;
-smooth = zeros(size(ydata));
-smooth(yNaN) = ydata(yNaN);
-smooth(2:end) = temp;
+% remove Inf and NaN
+yBad = isinf(logX) | isinf(logY) | isnan(logX) | isnan(logY);
+logX = logX(~yBad);
+logY = logY(~yBad);
+% smooth using fixed-width window and an n-point window with given method
+pointMethod = userInput.pointMethod;
+nPoints = userInput.nPoints;
+widthMethod = userInput.widthMethod;
+percentWidth = userInput.percentWidth;
+windowWidth = (percentWidth)*range(logY);
+ydataSmooth = smoothdata(logY,pointMethod,nPoints);
+ydataSmooth = smoothdata(ydataSmooth,widthMethod,windowWidth,SamplePoints=logX);
+% return to linscale
+ydataSmooth = 10.^ydataSmooth;
+% add back in the values that became nan/inf when going to logscale
+temp = ydataSmooth;
+ydataSmooth = zeros(size(ydata));
+ydataSmooth(yBad) = ydata(yBad);
+ydataSmooth(~yBad) = temp;
+end
+% find limits of data, where limits are the closest round #'s to extremes
+function [lower,upper] = CreateLimits(dat)
+lower = min(dat);
+lowerSign = sign(lower);
+lower = abs(lower);
+if lower ~= 0
+    exponent = floor(log10(lower));
+    mantissa = lower/10^exponent;
+    lower = floor(lowerSign*mantissa)*10^exponent;
+end
+
+upper = max(dat);
+upperSign = sign(upper);
+upper = abs(upper);
+if upper ~= 0
+    exponent = floor(log10(upper));
+    mantissa = upper/10^exponent;
+    upper = ceil(upperSign*mantissa)*10^exponent;
+end
 end
 
 %% Callbacks
 % Value changed function: WindowDropdown
-function WindowDropdownValueChanged(src,~)
+function WindowDropdownValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
+    f.UserData.Input.Spectrum.winType = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changed function: WindowEditbox
@@ -633,6 +693,7 @@ function WindowEditboxValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
     nSegments = round(event.Value);
     f.UserData.WindowSlider.Value = nSegments;
+    f.UserData.Input.Spectrum.nSegments = nSegments;
     UpdateSpectrumLines(f)
 end
 % Value changed function: WindowSlider
@@ -640,6 +701,7 @@ function WindowSliderValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
     nSegments = round(event.Value);
     f.UserData.WindowEditbox.Value = nSegments;
+    f.UserData.Input.Spectrum.nSegments = nSegments;
     UpdateSpectrumLines(f)
 end
 % Value changing function: WindowSlider
@@ -652,12 +714,14 @@ end
 function NoverlapEditboxValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
     f.UserData.NoverlapSlider.Value = event.Value;
+    f.UserData.Input.Spectrum.overlapPercentage = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changed function: NoverlapSlider
 function NoverlapSliderValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
     f.UserData.NoverlapEditbox.Value = event.Value;
+    f.UserData.Input.Spectrum.overlapPercentage = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changing function: NoverlapSlider
@@ -669,12 +733,14 @@ end
 function EnergyPercentageEditboxValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
     f.UserData.EnergyPercentageSlider.Value = event.Value;
+    f.UserData.Input.Spectrum.energyPercentage = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changed function: EnergyPercentageSlider
 function EnergyPercentageSliderValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
     f.UserData.EnergyPercentageEditbox.Value = event.Value;
+    f.UserData.Input.Spectrum.energyPercentage = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changing function: EnergyPercentageSlider
@@ -692,6 +758,8 @@ function PodRowEditboxValueChanged(src,event)
     cols = floor(N/rows);
     f.UserData.PodRowEditbox.Value = rows;
     f.UserData.PodColEditbox.Value = cols;
+    f.UserData.Input.Spectrum.nRows = rows;
+    f.UserData.Input.Spectrum.nCols = cols;
     UpdateSpectrumLines(f)
 end
 % Value changed function: PodColEditbox
@@ -704,45 +772,81 @@ function PodColEditboxValueChanged(src,event)
     rows = floor(N/cols);
     f.UserData.PodRowEditbox.Value = rows;
     f.UserData.PodColEditbox.Value = cols;
+    f.UserData.Input.Spectrum.nRows = rows;
+    f.UserData.Input.Spectrum.nCols = cols;
     UpdateSpectrumLines(f)
 end
 % Value changed function: SlopeEditbox
 function SlopeEditboxValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
-    f.UserData.Slope = event.Value;
+    f.UserData.Input.Reflines.slope = event.Value;
     f.UserData.SlopeSlider.Value = event.Value;
     UpdateReferenceLines(f)
 end
 % Value changing function: SlopeSlider
 function SlopeSliderValueChanging(src,event)
     f = ancestor(src,'figure','toplevel');
-    f.UserData.Slope = event.Value;
+    f.UserData.Input.Reflines.slope = event.Value;
     f.UserData.SlopeEditbox.Value = event.Value;
     UpdateReferenceLines(f)
 end
 % Value changing function: TranslateSlider
 function TranslateSliderValueChanging(src,event)
     f = ancestor(src,'figure','toplevel');
-    f.UserData.Translate = event.Value;
+    f.UserData.Input.Reflines.translate = event.Value;
     UpdateReferenceLines(f)
 end
+% Value changed function: SmoothWidthEditbox
+function SmoothWidthEditboxValueChanged(src,event)
+    f = ancestor(src,'figure','toplevel');
+    f.UserData.Input.Smooth.percentWidth = event.Value;
+    f.UserData.SmoothWidthSlider.Value = event.Value;
+    UpdateSpectrumLines(f)
+end
+% Value changed function: SmoothWidthSlider
+function SmoothWidthSliderValueChanged(src,event)
+    f = ancestor(src,'figure','toplevel');
+    f.UserData.Input.Smooth.percentWidth = event.Value;
+    f.UserData.SmoothWidthEditbox.Value = event.Value;
+    UpdateSpectrumLines(f)
+end
+% Value changed function: SmoothPointEditbox
+function SmoothPointEditboxValueChanged(src,event)
+    f = ancestor(src,'figure','toplevel');
+    f.UserData.Input.Smooth.nPoints = event.Value;
+    f.UserData.SmoothPointSlider.Value = event.Value;
+    UpdateSpectrumLines(f)
+end
+% Value changed function: SmoothPointSlider
+function SmoothPointSliderValueChanged(src,event)
+    f = ancestor(src,'figure','toplevel');
+    f.UserData.Input.Smooth.nPoints = event.Value;
+    f.UserData.SmoothPointEditbox.Value = event.Value;
+    UpdateSpectrumLines(f)
+end
+
 
 % Value changed function: FilenameListbox
 function FilenameValueChanged(src,event)
 f = ancestor(src,'figure','toplevel');
 plt = f.UserData;
+Input = plt.Input;
 AllStruct = plt.AllStruct;
-    % get the Config struct from the new file
+% get the Config struct from the new file
     nfile = event.ValueIndex;
     Config = AllStruct(nfile).Config;
-    
 % change slider limits and values to match new file
+    prevVal = plt.WindowEditbox.Value;
+    prevMaxVal = plt.WindowEditbox.Limits(2);
+    segmentRatio = prevVal/prevMaxVal;
     minVal = 1;
     maxVal = MaxSegments(Config);
-    plt.WIndowEditbox.Limits = [minVal,maxVal];
-    plt.WindowEditbox.Value = maxVal;
+    % maintain segment ratio between files
+    curVal = round(maxVal*segmentRatio);
+    plt.WindowEditbox.Limits = [minVal,maxVal];
+    plt.WindowEditbox.Value = curVal;
     plt.WindowSlider.Limits = [minVal,maxVal];
-    plt.WindowSlider.Value = maxVal;
+    plt.WindowSlider.Value = curVal;
     plt.WindowSlider.MajorTicks = [minVal,5:5:maxVal,maxVal];
     plt.WindowSlider.MinorTicks = minVal:maxVal;
 % maintain the ratio of rows to cols
@@ -757,63 +861,68 @@ AllStruct = plt.AllStruct;
 % change signal info for new file
     signalInfo = GetSignalInfo(Config);
     plt.SignalTable.Data = signalInfo;
+% change function inputs to match new file
+    s = Input.Spectrum;
+    s.winType = plt.WindowDropdown.Value;
+    s.nSegments = plt.WindowEditbox.Value;
+    s.overlapPercentage = plt.NoverlapEditbox.Value;
+    s.N = Config.ntimetot;
+    s.energyPercentage = plt.EnergyPercentageEditbox.Value;
+    s.nRows = plt.PodRowEditbox.Value;
+    s.nCols = plt.PodColEditbox.Value;
+    Input.Spectrum = s;
 
+plt.Input = Input;
 f.UserData = plt;
 UpdateSpectrumLines(f)
 end
-% Value changed function: VelButton
-function VelButtonValueChanged(src, ~)
-    f = ancestor(src,'figure','toplevel');
-    plt = f.UserData;
-    Acolor = plt.init.AnalysisColors;
-    SpectrumLines = plt.SpectrumLines;
-    btn = plt.VelButton;
-    val = btn.Value;
-    % set button visuals
-    if val
-        btn.BackgroundColor = Acolor(1,:);
-    else
-        btn.BackgroundColor = 0.8*ones(1,3);
+% update velocity button type visibility and y limits
+function AnalysisButtonValueChanged(src,~)
+f = ancestor(src,'figure','toplevel');
+plt = f.UserData;
+ax = plt.ax;
+SpectrumLines = plt.SpectrumLines;
+SmoothLines = plt.SmoothLines;
+init = plt.init;
+Acolor = init.AnalysisColors;
+btn = [plt.VelButton,plt.DespikedButton,plt.FilteredButton];
+val = [btn.Value];
+graphTypes = {'Psd','Pre'};
+    for g = 1:length(graphTypes)
+        % set button and line visuals
+        for b = 1:length(btn)
+            if val(b)
+                btn(b).BackgroundColor = Acolor(b,:);
+                set(SpectrumLines.(graphTypes{g})(:,b),'Visible','on')
+                set(SmoothLines.(graphTypes{g})(:,b),'Visible','on')
+            else
+                btn(b).BackgroundColor = 0.8*ones(1,3);
+                set(SpectrumLines.(graphTypes{g})(:,b),'Visible','off')
+                set(SmoothLines.(graphTypes{g})(:,b),'Visible','off')
+            end
+        end
+        % create and set y-limits, where the components are linked
+        Lines = SpectrumLines.(graphTypes{g});
+        [nComp,nAnalysis] = size(Lines);
+        lower = zeros(size(Lines));
+        upper = lower; % initialize upper and lower limits
+        for i = 1:nComp
+            for j = 1:nAnalysis
+                [lower(i,j),upper(i,j)] = CreateLimits(Lines(i,j).YData);
+            end
+        end
+        % take min/max across all components
+        lower = min(lower);
+        upper = max(upper);
+        % get rid of the analyses that aren't shown
+        lower = lower(val);
+        upper = upper(val);
+        % find absolute min/max over the analyses that are shown
+        ylims(1) = min(lower);
+        ylims(2) = max(upper); 
+        % set limits onto the lines
+        ax(1).(graphTypes{g}).YLim = ylims;
     end
-    % set line visuals
-    set(SpectrumLines.Psd(:,1),'Visible',val)
-    set(SpectrumLines.Pre(:,1),'Visible',val)
-end
-% Value changed function: DespikedButton
-function DespikedButtonValueChanged(src, ~)
-    f = ancestor(src,'figure','toplevel');
-    plt = f.UserData;
-    Acolor = plt.init.AnalysisColors;
-    SpectrumLines = plt.SpectrumLines;
-    btn = plt.DespikedButton;
-    val = btn.Value;
-    % set button visuals
-    if val
-        btn.BackgroundColor = Acolor(2,:);
-    else
-        btn.BackgroundColor = 0.8*ones(1,3);
-    end
-    % set line visuals
-    set(SpectrumLines.Psd(:,2),'Visible',val)
-    set(SpectrumLines.Pre(:,2),'Visible',val)
-end
-% Value changed function: FilteredButton
-function FilteredButtonValueChanged(src, ~)
-    f = ancestor(src,'figure','toplevel');
-    plt = f.UserData;
-    Acolor = plt.init.AnalysisColors;
-    SpectrumLines = plt.SpectrumLines;
-    btn = plt.FilteredButton;
-    val = btn.Value;
-    % set button visuals
-    if val
-        btn.BackgroundColor = Acolor(3,:);
-    else
-        btn.BackgroundColor = 0.8*ones(1,3);
-    end
-    % set line visuals
-    set(SpectrumLines.Psd(:,3),'Visible',val)
-    set(SpectrumLines.Pre(:,3),'Visible',val)
 end
 % Value changed function: CellSpinner
 function CellSpinnerValueChanged(src, ~)

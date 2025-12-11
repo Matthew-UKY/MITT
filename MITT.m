@@ -35,7 +35,7 @@ P = f.UserData.P;
     else
         dataPath = '';
     end
-    % get the path housing the data
+    % get the folder housing the data
     CSVControlpathname = uigetdir(dataPath,'Get data folder');
     CSVControlfilename = [CSVControlpathname,filesep,'ControlFile.csv'];
     % if default named control file doesn't exist
@@ -266,7 +266,8 @@ f = gcbf;
 hGUIControl = f.UserData.hGUIControl;
 P = f.UserData.P;
 CSVControl = f.UserData.CSVControl;
-    CSVControlpathname = hGUIControl.CSVControlpathname.Text;
+CSVControlfilename = hGUIControl.CSVControlfilename.Text;
+CSVControlpathname = hGUIControl.CSVControlpathname.Text;
     files = hGUIControl.FilestoCombine.Value;
     IsSelected = ismember(CSVControl.filename,files);
     ins = CSVControl.instrument(IsSelected);
@@ -320,6 +321,7 @@ CSVControl = f.UserData.CSVControl;
             CSVControl(IsCombined,:) = [];
             CSVControl = [CSVControl;datarow];
             CSVControl = sortrows(CSVControl,'filename');
+            writetable(CSVControl,[CSVControlpathname,filesep,CSVControlfilename])
             % update GUI to reflect the change, i.e. the FiletoCombine list
             hGUIControl.FilestoCombine.Items = CSVControl.filename;
             hGUIControl.FilestoCombine.Value = combinedFilename;
