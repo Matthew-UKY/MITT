@@ -6,7 +6,7 @@ clc
 % Calls OrganizeInput, CleanSeries, ClassifyArrayGUI, ClassifyArrayAuto 
 
 % default directory for stored data
-dataPath = 'C:\Users\mattl\Documents\College\Water Resources Research\Turbulence Research\2 Data Repository';
+dataPath = 'C:\Users\mtly228\Documents\MATLAB\2 - RAW & QAQC';
 
 %% Create figure/uicontrols
 % create launch GUI figure
