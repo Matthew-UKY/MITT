@@ -145,8 +145,8 @@ plt = f.UserData;
 % reference line controls
     plt.ReferenceLineCheckbox = uicheckbox(grid,Text='ON/OFF Reference Lines');
 
-    plt.ReferenceLinesSubpanel = uipanel(grid,Title='Reference Line Parameters');
-    grid1 = uigridlayout(plt.ReferenceLinesSubpanel);
+    plt.ReferenceLineSubpanel = uipanel(grid,Title='Reference Line Parameters');
+    grid1 = uigridlayout(plt.ReferenceLineSubpanel);
     grid1.RowHeight = {'fit',bh,'fit',bh};
     grid1.ColumnWidth = {'1x','2x','1x'};
     grid1.Padding = 5;
@@ -230,19 +230,21 @@ plt = f.UserData;
     plt.PodRowEditbox.ValueChangedFcn = @PodRowEditboxValueChanged;
     plt.PodColEditbox.ValueChangedFcn = @PodColEditboxValueChanged;
 % smoothing callbacks
+    plt.SmoothingCheckbox.ValueChangedFcn = @UpdateVisibility;
     plt.SmoothWidthEditbox.ValueChangedFcn = @SmoothWidthEditboxValueChanged;
     plt.SmoothWidthSlider.ValueChangedFcn = @SmoothWidthSliderValueChanged;
     plt.SmoothPointEditbox.ValueChangedFcn = @SmoothPointEditboxValueChanged;
     plt.SmoothPointSlider.ValueChangedFcn = @SmoothPointSliderValueChanged;
 % reference line callbacks
+    plt.ReferenceLineCheckbox.ValueChangedFcn = @UpdateVisibility;
     plt.SlopeEditbox.ValueChangedFcn = @SlopeEditboxValueChanged;
     plt.SlopeSlider.ValueChangingFcn = @SlopeSliderValueChanging;
     plt.TranslateSlider.ValueChangingFcn = @TranslateSliderValueChanging;
 % data callbacks
     plt.FilenameListbox.ValueChangedFcn = @FilenameValueChanged;
-    plt.VelButton.ValueChangedFcn = @AnalysisButtonValueChanged;
-    plt.DespikedButton.ValueChangedFcn = @AnalysisButtonValueChanged;
-    plt.FilteredButton.ValueChangedFcn = @AnalysisButtonValueChanged;
+    plt.VelButton.ValueChangedFcn = @UpdateVisibility;
+    plt.DespikedButton.ValueChangedFcn = @UpdateVisibility;
+    plt.FilteredButton.ValueChangedFcn = @UpdateVisibility;
     plt.CellSpinner.ValueChangedFcn = @CellSpinnerValueChanged;
 
 f.UserData = plt;
@@ -538,7 +540,7 @@ plt.SmoothLines = SmoothLines;
 f.UserData = plt;
 
 % update the visibility of lines
-AnalysisButtonValueChanged(f)
+UpdateVisibility(f)
 
 % update the reference lines to match new y limits
 UpdateReferenceLines(f)
@@ -878,32 +880,35 @@ f.UserData = plt;
 UpdateSpectrumLines(f)
 end
 % update velocity button type visibility and y limits
-function AnalysisButtonValueChanged(src,~)
+function UpdateVisibility(src,~)
 f = ancestor(src,'figure','toplevel');
 plt = f.UserData;
 ax = plt.ax;
 SpectrumLines = plt.SpectrumLines;
 SmoothLines = plt.SmoothLines;
+ReferenceLines = plt.ReferenceLines;
 init = plt.init;
 Acolor = init.AnalysisColors;
 btn = [plt.VelButton,plt.DespikedButton,plt.FilteredButton];
-val = [btn.Value];
-graphTypes = {'Psd','Pre'};
-    for g = 1:length(graphTypes)
+logi = [btn.Value];
+showSmooth = plt.SmoothingCheckbox.Value;
+plt.SmoothingSubpanel.Visible = showSmooth;
+graphType = {'Psd','Pre'};
+    for g = 1:length(graphType)
         % set button and line visuals
         for b = 1:length(btn)
-            if val(b)
+            if logi(b)
                 btn(b).BackgroundColor = Acolor(b,:);
-                set(SpectrumLines.(graphTypes{g})(:,b),'Visible','on')
-                set(SmoothLines.(graphTypes{g})(:,b),'Visible','on')
+                set(SpectrumLines.(graphType{g})(:,b),'Visible','on')
+                set(SmoothLines.(graphType{g})(:,b),'Visible',showSmooth)
             else
                 btn(b).BackgroundColor = 0.8*ones(1,3);
-                set(SpectrumLines.(graphTypes{g})(:,b),'Visible','off')
-                set(SmoothLines.(graphTypes{g})(:,b),'Visible','off')
+                set(SpectrumLines.(graphType{g})(:,b),'Visible','off')
+                set(SmoothLines.(graphType{g})(:,b),'Visible','off')
             end
         end
         % create and set y-limits, where the components are linked
-        Lines = SpectrumLines.(graphTypes{g});
+        Lines = SpectrumLines.(graphType{g});
         [nComp,nAnalysis] = size(Lines);
         lower = zeros(size(Lines));
         upper = lower; % initialize upper and lower limits
@@ -916,13 +921,18 @@ graphTypes = {'Psd','Pre'};
         lower = min(lower);
         upper = max(upper);
         % get rid of the analyses that aren't shown
-        lower = lower(val);
-        upper = upper(val);
+        lower = lower(logi);
+        upper = upper(logi);
         % find absolute min/max over the analyses that are shown
         ylims(1) = min(lower);
         ylims(2) = max(upper); 
         % set limits onto the lines
-        ax(1).(graphTypes{g}).YLim = ylims;
+        ax(1).(graphType{g}).YLim = ylims;
+
+        % update reference line visibility
+        val = plt.ReferenceLineCheckbox.Value;
+        plt.ReferenceLineSubpanel.Visible = val;
+        set([ReferenceLines.(graphType{g})],'Visible',val)
     end
 end
 % Value changed function: CellSpinner
