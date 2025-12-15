@@ -1,8 +1,8 @@
-%% TO FIX
-% collect all gathering of inputs into one function that can be called
-% easily. This might remove the need to have a separate callback for each
-% control. Might be a bad idea to do this, however, for maintainability and
-% improvement reasons. Think about it.
+%% Known bugs
+% translate is different between the loglog and semilog plots, need to fix
+% this discrepency
+
+%
 %%
 
 function PlotSpectrum(AllStruct,init)
@@ -386,7 +386,7 @@ Config = plt.AllStruct(1).Config;
     plt.SmoothPointSlider.Limits = [minVal,maxVal];
     plt.SmoothPointSlider.Value = defaultPoints;
 % initialize reference line controls
-    minVal = -10;
+    minVal = -3;
     maxVal = 0;
     defaultSlope = Config.Reflines.slope;
     plt.SlopeEditbox.Limits = [minVal,maxVal];
@@ -449,13 +449,10 @@ init = plt.init;
 
     % slope reference line struct
     ReferenceLines = struct();
-    lineDensity = 9; % number of lines to show on screen
-    expansionCoeff = 0.5; % to prevent cutoff of lines as they rotate
-    nRef = round(lineDensity*(1+expansionCoeff)-1);
+    nRef = 21; % estimate of max # of lines needed for plotting
+    ReferenceLines.LineDensity = 9; % number of lines shown on screen
     ReferenceLines.Psd = gobjects(nComp,nRef);
     ReferenceLines.Pre = gobjects(nComp,nRef);
-    ReferenceLines.LineDensity = lineDensity;
-    ReferenceLines.ExpansionCoefficient = expansionCoeff;
 
     for i = 1:nComp
         for j = 1:nAnalysis
@@ -556,36 +553,45 @@ function UpdateReferenceLines(f)
 plt = f.UserData;
 ax = plt.ax;
 Config = plt.AllStruct(1).Config;
-comp = Config.comp;
-nComp = length(comp);
 ReferenceLines = plt.ReferenceLines;
 slope = Config.Reflines.slope;
 translate = Config.Reflines.translate;
-nRef = length(ReferenceLines.Psd);
-expansionCoeff = ReferenceLines.ExpansionCoefficient;
+lineDensity = ReferenceLines.LineDensity;
 
-graphTypes = {'Psd','Pre'};
-slope = [slope,slope+1];
-for i = 1:length(graphTypes)
-    xlim = ax(1).(graphTypes{i}).XLim;
-    xdata(1) = xlim(1)/(xlim(2)/xlim(1))^(expansionCoeff/2);
-    xdata(2) = xlim(2)*(xlim(2)/xlim(1))^(expansionCoeff/2);
-    ylim = ax(1).(graphTypes{i}).YLim;
-    ydata(1) = ylim(1)/(ylim(2)/ylim(1))^(expansionCoeff/2);
-    ydata(2) = ylim(2)*(ylim(2)/ylim(1))^(expansionCoeff/2);
-    lineSpacing = linspace(log10(ydata(1)),log10(ydata(2)),nRef);
-    x0 = mean(xlim);
-    y0 = mean(ylim);
-    for j = 1:nComp
-        for k = 1:nRef
-            line = ReferenceLines.(graphTypes{i})(j,k);
-            line.XData = xdata;
-            ydata = y0*(xdata/x0).^slope(i) * 10^(lineSpacing(k)*sqrt(1+slope(i)^2));
-            ydata = ydata * 10^translate; % translate up and down
-            line.YData = ydata;
-        end
+% Psd axes
+xlims = ax(1).Psd.XLim;
+ylims = ax(1).Psd.YLim;
+lineSpacing = log10(ylims(2)/ylims(1))/lineDensity;
+
+nRef = length(ReferenceLines.Psd);
+lines = ReferenceLines.Psd(:,1);
+[xdata,ydata] = PsdReflineData(xlims,ylims,slope,translate,0);
+set(lines,'XData',xdata)
+set(lines,'YData',ydata)
+for i = 1:(nRef-1)/2
+    % positive offset lines
+    lines = ReferenceLines.Psd(:,2*i);
+    [xdata,ydata,inBounds] = PsdReflineData(xlims,ylims,slope,translate,i*lineSpacing);
+    if inBounds
+        set(lines,'XData',xdata)
+        set(lines,'YData',ydata)
+    else
+        set(lines,'XData',[])
+        set(lines,'YData',[])
+    end
+    % negative offset lines
+    lines = ReferenceLines.Psd(:,2*i+1);
+    [xdata,ydata,inBounds] = PsdReflineData(xlims,ylims,slope,translate,-i*lineSpacing);
+    if inBounds
+        set(lines,'XData',xdata)
+        set(lines,'YData',ydata)
+    else
+        set(lines,'XData',[])
+        set(lines,'YData',[])
     end
 end
+
+
 end
 % split into 32s segments
 function maxSegments = MaxSegments(Config)
@@ -712,6 +718,42 @@ sm.nPoints = plt.SmoothPointEditbox.Value;
 sm.widthMethod;
 sm.percentWidth = plt.SmoothWidthEditbox.Value;
 end
+% xdata and ydata are found at the borders of the view window defined by
+% xlims and ylims
+function [xdata,ydata,inBounds] = PsdReflineData(xlims,ylims,slope,translate,lineSpacing)
+% find geometric mean for midpoint in logspace
+x0 = sqrt(xlims(1)*xlims(2));
+y0 = sqrt(ylims(1)*ylims(2));
+
+% create the four possible points of intersection
+xdata = zeros(4,1);
+ydata = xdata;
+% (xlim(1),y) and (xlim(2),y)
+for i = 1:2
+    xdata(i) = xlims(i);
+    ydata(i) = y0*(xdata(i)/x0).^slope;
+    ydata(i) = ydata(i) * 10^(lineSpacing*sqrt(1+slope^2));
+    ydata(i) = ydata(i) * 10^translate;
+end
+% (x,ylim(1)) and (x,ylim(2))
+for i = 3:4
+    ydata(i) = ylims(i-2);
+    xdata(i) = ydata(i) / 10^translate;
+    xdata(i) = xdata(i) / 10^(lineSpacing*sqrt(1+slope^2));
+    xdata(i) = x0 * (xdata(i) / y0).^(1/slope);
+end
+
+% check that the x- and y-coordinates fall within the viewing rectangle
+logiX = (xdata - xlims(1) >= 0) & (xlims(2) - xdata >= 0);
+logiY = (ydata - ylims(1) >= 0) & (ylims(2) - ydata >= 0);
+inBounds = logiX & logiY;
+
+xdata = xdata(inBounds);
+ydata = ydata(inBounds);
+inBounds = any(inBounds); % if any are in bounds, allow program through
+
+end
+
 
 %% Callbacks
 % Value changed function: WindowDropdown
