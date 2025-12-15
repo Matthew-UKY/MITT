@@ -1,3 +1,10 @@
+%% TO FIX
+% collect all gathering of inputs into one function that can be called
+% easily. This might remove the need to have a separate callback for each
+% control. Might be a bad idea to do this, however, for maintainability and
+% improvement reasons. Think about it.
+%%
+
 function PlotSpectrum(AllStruct,init)
 %
 % debug
@@ -483,8 +490,7 @@ Data = plt.AllStruct(nfile).Data;
 Config = plt.AllStruct(nfile).Config;
 SpectrumLines = plt.SpectrumLines;
 SmoothLines = plt.SmoothLines;
-spectrumInputs = Config.Spectrum;
-smoothingInputs = Config.Smooth;
+Config = GetInputs(plt,Config);
 
 % config variables
     comp = Config.comp;
@@ -499,18 +505,18 @@ smoothingInputs = Config.Smooth;
 
 % inputs to the pwelch function
     fs = Config.Hz;
-    window = CreateWindow(spectrumInputs);
-    noverlap = CreateNoverlap(spectrumInputs);
+    window = CreateWindow(Config.Spectrum);
+    noverlap = CreateNoverlap(Config.Spectrum);
 
     oldPxxLength = length(SpectrumLines.Psd(1,1).XData);
     for i = 1:nComp
         for j = 1:nAnalysis
             % use POD/pwelch to create a denoised spectrum of the data
             signal = Data.(Anames{j}).(comp{i})(:,ncell);
-            signal = PodDenoiseSignal(signal,spectrumInputs);
+            signal = PodDenoiseSignal(signal,Config.Spectrum);
             [pxx,freq] = pwelch(signal,window,noverlap,[],fs);
             premult = freq .* pxx;
-            smoothPxx = SmoothSignal(pxx,freq,smoothingInputs);
+            smoothPxx = SmoothSignal(pxx,freq,Config.Smooth);
             smoothPremult = freq .* smoothPxx;
             newPxxLength = length(pxx);
             if newPxxLength ~= oldPxxLength
@@ -688,12 +694,29 @@ if upper ~= 0
     upper = ceil(upperSign*mantissa)*10^exponent;
 end
 end
+% get inputs from the GUI and save in Config
+function Config = GetInputs(plt,Config)
+sp = Config.Spectrum;
+sp.winType = plt.WindowDropdown.Value;
+sp.N = Config.ntimetot;
+sp.nSegments = plt.WindowEditbox.Value;
+sp.overlapPercentage = plt.NoverlapEditbox.Value;
+sp.energyPercentage = plt.EnergyPercentageEditbox.Value;
+sp.nRows = plt.PodRowEditbox.Value;
+sp.nCols = plt.PodColEditbox.Value;
+Config.Spectrum = sp;
+
+sm = Config.Smooth;
+sm.pointMethod;
+sm.nPoints = plt.SmoothPointEditbox.Value;
+sm.widthMethod;
+sm.percentWidth = plt.SmoothWidthEditbox.Value;
+end
 
 %% Callbacks
 % Value changed function: WindowDropdown
-function WindowDropdownValueChanged(src,event)
+function WindowDropdownValueChanged(src,~)
     f = ancestor(src,'figure','toplevel');
-    f.UserData.Input.Spectrum.winType = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changed function: WindowEditbox
@@ -701,7 +724,6 @@ function WindowEditboxValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
     nSegments = round(event.Value);
     f.UserData.WindowSlider.Value = nSegments;
-    f.UserData.Input.Spectrum.nSegments = nSegments;
     UpdateSpectrumLines(f)
 end
 % Value changed function: WindowSlider
@@ -709,7 +731,6 @@ function WindowSliderValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
     nSegments = round(event.Value);
     f.UserData.WindowEditbox.Value = nSegments;
-    f.UserData.Input.Spectrum.nSegments = nSegments;
     UpdateSpectrumLines(f)
 end
 % Value changing function: WindowSlider
@@ -722,14 +743,12 @@ end
 function NoverlapEditboxValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
     f.UserData.NoverlapSlider.Value = event.Value;
-    f.UserData.Input.Spectrum.overlapPercentage = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changed function: NoverlapSlider
 function NoverlapSliderValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
     f.UserData.NoverlapEditbox.Value = event.Value;
-    f.UserData.Input.Spectrum.overlapPercentage = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changing function: NoverlapSlider
@@ -741,14 +760,12 @@ end
 function EnergyPercentageEditboxValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
     f.UserData.EnergyPercentageSlider.Value = event.Value;
-    f.UserData.Input.Spectrum.energyPercentage = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changed function: EnergyPercentageSlider
 function EnergyPercentageSliderValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
     f.UserData.EnergyPercentageEditbox.Value = event.Value;
-    f.UserData.Input.Spectrum.energyPercentage = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changing function: EnergyPercentageSlider
@@ -766,8 +783,6 @@ function PodRowEditboxValueChanged(src,event)
     cols = floor(N/rows);
     f.UserData.PodRowEditbox.Value = rows;
     f.UserData.PodColEditbox.Value = cols;
-    f.UserData.Input.Spectrum.nRows = rows;
-    f.UserData.Input.Spectrum.nCols = cols;
     UpdateSpectrumLines(f)
 end
 % Value changed function: PodColEditbox
@@ -780,55 +795,58 @@ function PodColEditboxValueChanged(src,event)
     rows = floor(N/cols);
     f.UserData.PodRowEditbox.Value = rows;
     f.UserData.PodColEditbox.Value = cols;
-    f.UserData.Input.Spectrum.nRows = rows;
-    f.UserData.Input.Spectrum.nCols = cols;
     UpdateSpectrumLines(f)
 end
 % Value changed function: SlopeEditbox
 function SlopeEditboxValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
-    f.UserData.Input.Reflines.slope = event.Value;
     f.UserData.SlopeSlider.Value = event.Value;
+    nfile = f.UserData.FilenameListbox.ValueIndex;
+    Config = f.UserData.AllStruct(nfile).Config;
+    Config.Reflines.slope = event.Value;
+    f.UserData.AllStruct(nfile).Config = Config;
     UpdateReferenceLines(f)
 end
 % Value changing function: SlopeSlider
 function SlopeSliderValueChanging(src,event)
     f = ancestor(src,'figure','toplevel');
-    f.UserData.Input.Reflines.slope = event.Value;
     f.UserData.SlopeEditbox.Value = event.Value;
+    nfile = f.UserData.FilenameListbox.ValueIndex;
+    Config = f.UserData.AllStruct(nfile).Config;
+    Config.Reflines.slope = event.Value;
+    f.UserData.AllStruct(nfile).Config = Config;
     UpdateReferenceLines(f)
 end
 % Value changing function: TranslateSlider
 function TranslateSliderValueChanging(src,event)
     f = ancestor(src,'figure','toplevel');
-    f.UserData.Input.Reflines.translate = event.Value;
+    nfile = f.UserData.FilenameListbox.ValueIndex;
+    Config = f.UserData.AllStruct(nfile).Config;
+    Config.Reflines.translate = event.Value;
+    f.UserData.AllStruct(nfile).Config = Config;
     UpdateReferenceLines(f)
 end
 % Value changed function: SmoothWidthEditbox
 function SmoothWidthEditboxValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
-    f.UserData.Input.Smooth.percentWidth = event.Value;
     f.UserData.SmoothWidthSlider.Value = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changed function: SmoothWidthSlider
 function SmoothWidthSliderValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
-    f.UserData.Input.Smooth.percentWidth = event.Value;
     f.UserData.SmoothWidthEditbox.Value = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changed function: SmoothPointEditbox
 function SmoothPointEditboxValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
-    f.UserData.Input.Smooth.nPoints = event.Value;
     f.UserData.SmoothPointSlider.Value = event.Value;
     UpdateSpectrumLines(f)
 end
 % Value changed function: SmoothPointSlider
 function SmoothPointSliderValueChanged(src,event)
     f = ancestor(src,'figure','toplevel');
-    f.UserData.Input.Smooth.nPoints = event.Value;
     f.UserData.SmoothPointEditbox.Value = event.Value;
     UpdateSpectrumLines(f)
 end
