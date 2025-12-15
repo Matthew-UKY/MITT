@@ -289,14 +289,48 @@ end
 function f = InitializeUI(f)
 plt = f.UserData;
 init = plt.init;
+
+% initialize the inputs to plotting functions in the Config structs
+nFiles = length(plt.AllStruct);
+for i = 1:nFiles
+    Config = plt.AllStruct(i).Config;
+    Config.Spectrum = struct();
+    % Use a hanning window
+    Config.Spectrum.winType = 'hanning';
+    Config.Spectrum.N = Config.ntimetot;
+    % Assumption that the mean stabilizes in 1 minute
+    Config.Spectrum.nSegments = round(Config.ntimetot/Config.Hz/60);
+    Config.Spectrum.overlapPercentage = 0;
+    Config.Spectrum.energyPercentage = 0.8;
+    % Assume square POD matrix
+    N = Config.ntimetot;
+    rows = floor(sqrt(N));
+    cols = floor(N/rows);
+    Config.Spectrum.nRows = rows;
+    Config.Spectrum.nCols = cols;
+
+    Config.Smooth = struct();
+    Config.Smooth.pointMethod = 'movmedian'; % add dropdown
+    Config.Smooth.nPoints = 7;
+    Config.Smooth.widthMethod = 'gaussian'; % add dropdown
+    Config.Smooth.percentWidth = 0.01;
+
+    Config.Reflines = struct();
+    Config.Reflines.slope = -5/3;
+    Config.Reflines.translate = 0;
+
+    plt.AllStruct(i).Config = Config;
+end
+
+% initialize the ui to display the 1st file
 Config = plt.AllStruct(1).Config;
 
 % Initialize window controls
     plt.WindowDropdown.Items = {'hamming','hanning','rectangular'};
-    plt.WindowDropdown.Value = 'hanning';
+    plt.WindowDropdown.Value = Config.Spectrum.winType;
     minVal = 1;
     maxVal = MaxSegments(Config); 
-    nSegments = maxVal;
+    nSegments = Config.Spectrum.nSegments;
     plt.WindowEditbox.Limits = [minVal,maxVal];
     plt.WindowEditbox.Value = nSegments;
     plt.WindowSlider.Limits = [minVal,maxVal];
@@ -306,7 +340,7 @@ Config = plt.AllStruct(1).Config;
 % Initialize noverlap controls
     minVal = 0;
     maxVal = 0.90;
-    novDefault = 0;
+    novDefault = Config.Spectrum.overlapPercentage;
     plt.NoverlapEditbox.Limits = [minVal,maxVal];
     plt.NoverlapEditbox.Value = novDefault;
     plt.NoverlapSlider.Limits = [minVal,maxVal];
@@ -317,7 +351,7 @@ Config = plt.AllStruct(1).Config;
 % Initialize pod ui controls
     minVal = 0;
     maxVal = 1;
-    energyDefault = 1;
+    energyDefault = Config.Spectrum.energyPercentage;
     plt.EnergyPercentageEditbox.Limits = [minVal,maxVal];
     plt.EnergyPercentageEditbox.Value = energyDefault;
     plt.EnergyPercentageSlider.Limits = [minVal,maxVal];
@@ -325,15 +359,27 @@ Config = plt.AllStruct(1).Config;
     plt.EnergyPercentageSlider.MajorTicks = minVal:0.25:maxVal;
     plt.EnergyPercentageSlider.MajorTickLabels = string(minVal:0.25:maxVal);
     plt.EnergyPercentageSlider.MinorTicks = minVal:0.05:maxVal;
-    N = Config.ntimetot;
-    rows = floor(sqrt(N));
-    cols = floor(N/rows);
-    plt.PodRowEditbox.Value = rows;
-    plt.PodColEditbox.Value = cols;
+    plt.PodRowEditbox.Value = Config.Spectrum.nRows;
+    plt.PodColEditbox.Value = Config.Spectrum.nCols;
+% initialize smoothing controls
+    minVal = 0;
+    maxVal = 1;
+    defaultWidth = Config.Smooth.percentWidth;
+    plt.SmoothWidthEditbox.Limits = [minVal,maxVal];
+    plt.SmoothWidthEditbox.Value = defaultWidth;
+    plt.SmoothWidthSlider.Limits = [minVal,maxVal];
+    plt.SmoothWidthSlider.Value = defaultWidth;
+    minVal = 1;
+    maxVal = 20; % arbitrary
+    defaultPoints = Config.Smooth.nPoints;
+    plt.SmoothPointEditbox.Limits = [minVal,maxVal];
+    plt.SmoothPointEditbox.Value = defaultPoints;
+    plt.SmoothPointSlider.Limits = [minVal,maxVal];
+    plt.SmoothPointSlider.Value = defaultPoints;
 % initialize reference line controls
     minVal = -10;
     maxVal = 0;
-    defaultSlope = -5/3;
+    defaultSlope = Config.Reflines.slope;
     plt.SlopeEditbox.Limits = [minVal,maxVal];
     plt.SlopeEditbox.Value = defaultSlope;
     plt.SlopeSlider.Limits = [minVal,maxVal];
@@ -345,21 +391,6 @@ Config = plt.AllStruct(1).Config;
     plt.TranslateSlider.MajorTicks = [];
     plt.TranslateSlider.MinorTicks = [];
     plt.TranslateSlider.Value = defaultTranslate;
-% initialize smoothing controls
-    minVal = 0;
-    maxVal = 1;
-    defaultWidth = 0.138; % optimal from external testing
-    plt.SmoothWidthEditbox.Limits = [minVal,maxVal];
-    plt.SmoothWidthEditbox.Value = defaultWidth;
-    plt.SmoothWidthSlider.Limits = [minVal,maxVal];
-    plt.SmoothWidthSlider.Value = defaultWidth;
-    minVal = 1;
-    maxVal = 51;
-    defaultPoints = 7; % optimal from external testing
-    plt.SmoothPointEditbox.Limits = [minVal,maxVal];
-    plt.SmoothPointEditbox.Value = defaultPoints;
-    plt.SmoothPointSlider.Limits = [minVal,maxVal];
-    plt.SmoothPointSlider.Value = defaultPoints;
 
 % initialize data display controls
     signalInfo = GetSignalInfo(Config);
@@ -380,33 +411,9 @@ Config = plt.AllStruct(1).Config;
     set([ax.Psd],'XLim',[10^-2,Config.Hz])
     set([ax.Pre],'XLim',[10^-2,Config.Hz])
 
-% initialize the inputs to plotting functions
-    Input = struct();
-
-    Input.Spectrum = struct();
-    Input.Spectrum.winType = plt.WindowDropdown.Value;
-    Input.Spectrum.nSegments = plt.WindowEditbox.Value;
-    Input.Spectrum.overlapPercentage = plt.NoverlapEditbox.Value;
-    Input.Spectrum.N = Config.ntimetot;
-    Input.Spectrum.energyPercentage = plt.EnergyPercentageEditbox.Value;
-    Input.Spectrum.nRows = plt.PodRowEditbox.Value;
-    Input.Spectrum.nCols = plt.PodColEditbox.Value;
-
-    Input.Smooth = struct();
-    Input.Smooth.pointMethod = 'movmedian'; % add dropdown
-    Input.Smooth.nPoints = plt.SmoothPointEditbox.Value;
-    Input.Smooth.widthMethod = 'gaussian'; % add dropdown
-    Input.Smooth.percentWidth = plt.SmoothWidthEditbox.Value;
-
-    Input.Reflines = struct();
-    Input.Reflines.slope = plt.SlopeEditbox.Value;
-    Input.Reflines.translate = plt.TranslateSlider.Value;
-
-    plt.Input = Input;
-
 f.UserData = plt;
 end
-% create the lines in each of the axes
+% create empty containers for each of the lines in each plot
 function CreateLines(f)
 plt = f.UserData;
 ax = plt.ax;
@@ -426,6 +433,11 @@ init = plt.init;
     SpectrumLines.Psd = gobjects(nComp,nAnalysis);
     SpectrumLines.Pre = gobjects(nComp,nAnalysis);
 
+    % smoothed lines
+    SmoothLines = struct();
+    SmoothLines.Psd = gobjects(nComp,nAnalysis);
+    SmoothLines.Pre = gobjects(nComp,nAnalysis);
+
     % slope reference line struct
     ReferenceLines = struct();
     lineDensity = 9; % number of lines to show on screen
@@ -435,11 +447,6 @@ init = plt.init;
     ReferenceLines.Pre = gobjects(nComp,nRef);
     ReferenceLines.LineDensity = lineDensity;
     ReferenceLines.ExpansionCoefficient = expansionCoeff;
-
-    % smoothed lines
-    SmoothLines = struct();
-    SmoothLines.Psd = gobjects(nComp,nAnalysis);
-    SmoothLines.Pre = gobjects(nComp,nAnalysis);
 
     for i = 1:nComp
         for j = 1:nAnalysis
@@ -474,8 +481,8 @@ Data = plt.AllStruct(nfile).Data;
 Config = plt.AllStruct(nfile).Config;
 SpectrumLines = plt.SpectrumLines;
 SmoothLines = plt.SmoothLines;
-spectrumInputs = plt.Input.Spectrum;
-smoothingInputs = plt.Input.Smooth;
+spectrumInputs = Config.Spectrum;
+smoothingInputs = Config.Smooth;
 
 % config variables
     comp = Config.comp;
@@ -544,9 +551,8 @@ Config = plt.AllStruct(1).Config;
 comp = Config.comp;
 nComp = length(comp);
 ReferenceLines = plt.ReferenceLines;
-Input = plt.Input;
-slope = Input.Reflines.slope;
-translate = Input.Reflines.translate;
+slope = Config.Reflines.slope;
+translate = Config.Reflines.translate;
 nRef = length(ReferenceLines.Psd);
 expansionCoeff = ReferenceLines.ExpansionCoefficient;
 
@@ -830,49 +836,44 @@ end
 function FilenameValueChanged(src,event)
 f = ancestor(src,'figure','toplevel');
 plt = f.UserData;
-Input = plt.Input;
 AllStruct = plt.AllStruct;
 % get the Config struct from the new file
-    nfile = event.ValueIndex;
-    Config = AllStruct(nfile).Config;
-% change slider limits and values to match new file
-    prevVal = plt.WindowEditbox.Value;
-    prevMaxVal = plt.WindowEditbox.Limits(2);
-    segmentRatio = prevVal/prevMaxVal;
+nfile = event.ValueIndex;
+Config = AllStruct(nfile).Config;
+% window slider/editbox limits/values
     minVal = 1;
     maxVal = MaxSegments(Config);
-    % maintain segment ratio between files
-    curVal = round(maxVal*segmentRatio);
+    newVal = Config.Spectrum.nSegments;
     plt.WindowEditbox.Limits = [minVal,maxVal];
-    plt.WindowEditbox.Value = curVal;
+    plt.WindowEditbox.Value = newVal;
     plt.WindowSlider.Limits = [minVal,maxVal];
-    plt.WindowSlider.Value = curVal;
+    plt.WindowSlider.Value = newVal;
     plt.WindowSlider.MajorTicks = [minVal,5:5:maxVal,maxVal];
     plt.WindowSlider.MinorTicks = minVal:maxVal;
-% maintain the ratio of rows to cols
-    rows = plt.PodRowEditbox.Value;
-    cols = plt.PodColEditbox.Value;
-    ratio = rows/cols;
-    N = Config.ntimetot;
-    rows = floor(sqrt(N*ratio));
-    cols = floor(sqrt(N/ratio));
-    plt.PodRowEditbox.Value = rows;
-    plt.PodColEditbox.Value = cols;
+% noverlap slider/editbox values
+    newVal = Config.Spectrum.overlapPercentage;
+    plt.NoverlapEditbox.Value = newVal;
+    plt.NoverlapSlider.Value = newVal;
+% POD energy slider/editbox values
+    newVal= Config.Spectrum.energyPercentage;
+    plt.EnergyPercentageEditbox.Value = newVal;
+    plt.EnergyPercentageSlider.Value = newVal;
+% change nrows/ncols
+    plt.PodRowEditbox.Value = Config.Spectrum.nRows;
+    plt.PodColEditbox.Value = Config.Spectrum.nCols;
+% smoothing parameters
+    plt.SmoothWidthEditbox.Value = Config.Smooth.percentWidth;
+    plt.SmoothWidthSlider.Value = Config.Smooth.percentWidth;
+    plt.SmoothPointEditbox.Value = Config.Smooth.nPoints;
+    plt.SmoothPointSlider.Value = Config.Smooth.nPoints;
+% refline parameters
+    plt.SlopeEditbox.Value = Config.Reflines.slope;
+    plt.SlopeSlider.Value = Config.Reflines.slope;
+    plt.TranslateSlider.Value = Config.Reflines.translate;
 % change signal info for new file
     signalInfo = GetSignalInfo(Config);
     plt.SignalTable.Data = signalInfo;
-% change function inputs to match new file
-    s = Input.Spectrum;
-    s.winType = plt.WindowDropdown.Value;
-    s.nSegments = plt.WindowEditbox.Value;
-    s.overlapPercentage = plt.NoverlapEditbox.Value;
-    s.N = Config.ntimetot;
-    s.energyPercentage = plt.EnergyPercentageEditbox.Value;
-    s.nRows = plt.PodRowEditbox.Value;
-    s.nCols = plt.PodColEditbox.Value;
-    Input.Spectrum = s;
 
-plt.Input = Input;
 f.UserData = plt;
 UpdateSpectrumLines(f)
 end
