@@ -5,8 +5,8 @@ function veldespike = SpikeSkewness(raw,UniMult,ReplacementMethod)
 nttot = length(raw);
 UniThresh = UniMult*(2*log(nttot))^0.5;          %CALCULATES UNIVERSAL THRESHOLD
 
-% as per Wahl, T. L. (2003), Discussion of ‘‘Despiking Acoustic Doppler Velocimeter Data’’ by Derek G. Goring and Vladimir I. Nikora, Journal of Hydraulic Engineering, 129(6), 484-487.
-% and supported by Goring, D. G., and V. I. Nikora (2003), Closure to ‘‘Depiking Acoustic Doppler Velocimeter Data’’ by Derek G. Goring and Vladimir I. Nikora, Journal of Hydraulic Engineering, 129(6), 487-488.
+% as per Wahl, T. L. (2003), Discussion of â€˜â€˜Despiking Acoustic Doppler Velocimeter Dataâ€™â€™ by Derek G. Goring and Vladimir I. Nikora, Journal of Hydraulic Engineering, 129(6), 484-487.
+% and supported by Goring, D. G., and V. I. Nikora (2003), Closure to â€˜â€˜Depiking Acoustic Doppler Velocimeter Dataâ€™â€™ by Derek G. Goring and Vladimir I. Nikora, Journal of Hydraulic Engineering, 129(6), 487-488.
 % use median as location estimator rather than mean
 medianvel= median(raw);
 

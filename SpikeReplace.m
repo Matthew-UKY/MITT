@@ -1,6 +1,6 @@
-function veldespike = SpikeReplace(spikeyes,vel,ReplacementMethod);
+function veldespike = SpikeReplace(spikeyes,vel,ReplacementMethod)
 % replaces detected spikes in time series
-% called from SpikeSkewness and SpikeGoringNikora
+% called from SpikeStddev, SpikeSkewness, and SpikeGoringNikora
 
 % set output equal to input to start
 veldespike = vel;
@@ -36,7 +36,7 @@ spiketot = length(spikes);
 
 for snum = 1:spiketot
     % replacement algorithm
-    if ReplacementMethod == 1
+    if strcmp(ReplacementMethod,'linear interpolation')
         % linear interpolation
         veldespike(spikes(snum)+1:spikee(snum)) = interp1([spikes(snum) spikee(snum)+1],...
             [vel(spikes(snum)) vel(spikee(snum)+1)],[spikes(snum)+1:spikee(snum)]);

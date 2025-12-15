@@ -1,4 +1,4 @@
-function OrganizeInput(GUIControl)
+function OrganizeInput(GUIControl,P)
 % Control file for organizing instrument output into Data and Config arrays
 % Called from MITT
 % Calls Organize(Instrument)Data, where Instrument comes from Control.Instrument 
@@ -6,20 +6,25 @@ function OrganizeInput(GUIControl)
 
 %%
 % get control file
-CSVControl = ConvCSV2Struct([GUIControl.CSVControlpathname,GUIControl.CSVControlfilename],0);
+csvname = [GUIControl.CSVControlpathname,filesep,GUIControl.CSVControlfilename];
+CSVControl = readtable(csvname);
 % number of files
-nftot = length(CSVControl);
+nftot = height(CSVControl);
 
 % store output name and number of files
 GUIControl.nftot = nftot;
 
 if GUIControl.DefineGeometry
     % calculate mesh of sampling channel
+    P.message.Value{end+1} = '    Runnning CalcChannelMesh';
+    scroll(P.message,'bottom')
+    pause(0.01)
     GUIControl = CalcChannelMesh(GUIControl,CSVControl);
 end
-
 % save file
 chk = dir(GUIControl.outname);
+P.message.Value{end+1} = '    Saving GUIControl output file';
+scroll(P.message,'bottom')
 if isempty(chk)
     save(GUIControl.outname,'GUIControl')
 else
@@ -29,14 +34,17 @@ end
 % for each file
 for nf = 1:nftot
     % load data by sending Control structure to the instrument-appropriate Organize**Data file
-    OrganizeData = str2func(['Organize',CSVControl(nf).instrument,'Data']);
-    [Data,Config] = OrganizeData(GUIControl,CSVControl(nf));
+    OrganizeData = str2func(['Organize',CSVControl.instrument{nf},'Data']);
+    P.message.Value{end+1} = ['    ',CSVControl(nf,:).filename{1}];
+    scroll(P.message,'bottom')
+    pause(0.01)
+    [Data,Config] = OrganizeData(GUIControl,CSVControl(nf,:));
 
     Config.CSVControlpathname = GUIControl.CSVControlpathname;
     % filename
-    Config.filename = CSVControl(nf).filename;
+    Config.filename = CSVControl.filename{nf};
     % save Config and Data to the output file
-    oname = [GUIControl.odir,filesep,'MITT_',Config.filename,'.mat'];
+    oname = [GUIControl.odir,filesep,'MITT_',Config.filename];
     % chk for any output files
     chk = dir(oname);
     % if this file has not been created
@@ -50,7 +58,7 @@ for nf = 1:nftot
         for nc = 1:ncomptot
             Config.goodCells.(Config.comp{nc}) = goodCells;
         end
-        % add variable nums to keep track of what analyses have been completed
+        % add logical values to keep track of what analyses have been completed
         Config.Despiked = false; %
         Config.Filtered = false; %
 

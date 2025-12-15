@@ -1,4 +1,3 @@
-function MITT
 clear
 clc
 
@@ -6,73 +5,85 @@ clc
 % Called from command line
 % Calls OrganizeInput, CleanSeries, ClassifyArrayGUI, ClassifyArrayAuto 
 
-% modifications May 2016 by BM
-% add buttons for SpikeARMA and setARMAopts to allow despiking by this method
-% don't turn off Run button if any of three boxes in Computational Block Control are active
-% more commenting
+% default directory for stored data
+dataPath = 'C:\Users\mattl\Documents\College\Water Resources Research\Turbulence Research\2 Data Repository';
 
 %% Create figure/uicontrols
 % create launch GUI figure
-pltLaunch = CreatepltLaunch;
+f = CreateUIFigure;
+f.UserData.dataPath = dataPath;
 
-% create uicontrol buttons in pltLaunch
-[P,hGUIControl,faQC] = makeUIControls(pltLaunch);
+% create uicontrol buttons in f
+f = MakeUIControls(f);
 
-%% initialize panel visibilty
-set(hGUIControl.ChannelType,'Visible','off');
-set(P.SamplingLocations,'Visible','off');
-set(P.Uniform,'Visible','off');
-set(P.NonUniform,'Visible','off');
-set(P.Organize,'Visible','off');
+% initialize panel visibilty
+f = InitializeUI(f);
 
-set(P.SpikeOptions,'Visible','off');
-set(P.FilterOptions,'Visible','off');
-set(P.Clean,'Visible','off');
-
-set(P.Classify,'Visible','off');
-P.faQCOptions.Visible = 'off';
-set(P.Select,'Visible','off');
-set(P.run,'Enable','off');
-
-%% set callback functions for the various uicontrols
-% set the CSVcontrol file names
-set(P.getfile,'ButtonPushedFcn',@hgetfileCallback);
-% Computational block control callbacks
-set(hGUIControl.Organize,'ValueChangedFcn',@hOrganizeCallback);
-set(hGUIControl.Clean,'ValueChangedFcn',@hCleanCallback);
-set(hGUIControl.Classify,'ValueChangedFcn',@hClassifyCallback);
-% Organization block callbacks
-set(hGUIControl.DefineGeometry,'ValueChangedFcn',@hDefineGeometryCallback);
-set(hGUIControl.Sampling,'ValueChangedFcn',@hSamplingCallback);
-set(hGUIControl.getCalcChannelfile,'ButtonPushedFcn',@hgetCalcChannelfileCallback);
-set(hGUIControl.ChannelType,'ValueChangedFcn',@hChannelTypeCallback); 
-set(hGUIControl.ChannelPreset,'ValueChangedFcn',@hChannelPresetCallback);
-set(hGUIControl.Length,'ValueChangedFcn',@hLengthCallback);
-set(hGUIControl.Width,'ValueChangedFcn',@hWidthCallback);
-set(hGUIControl.Depth,'ValueChangedFcn',@hDepthCallback);
-set(hGUIControl.getCalcXYZfile,'ButtonPushedFcn',@hgetCalcXYZfileCallback);
-% Clean block callbacks
-set(hGUIControl.Despike,'ValueChangedFcn',@hDespikeCallback);
-set(hGUIControl.Preprocess,'ValueChangedFcn',@hPreprocessCallback);
-set(hGUIControl.SpikeARMA,'ValueChangedFcn',@hSpikeARMACallback);
-set(P.ARMAopts,'ButtonPushedFcn',@hARMAoptsCallback);
-set(hGUIControl.FiltrBW,'ValueChangedFcn',@hFiltrBWCallback);
-% Run button callback
-set(P.run,'ButtonPushedFcn',@hrunCallback);
+% set callbacks
+f = SetCallbackFunctions(f);
 
 %% Callback functions
 
 %%  File and Message Center
-% to get CSVControl file through a gui window
+% to get/setup the CSV control file
 function hgetfileCallback(~, ~, ~)
-    % get the name and path of file
-    [CSVControlfilename, CSVControlpathname] = uigetfile({'*.csv';'*.txt'},'Get control text file');
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+    if isfolder(f.UserData.dataPath)
+        dataPath = f.UserData.dataPath;
+    else
+        dataPath = '';
+    end
+    % get the folder housing the data
+    CSVControlpathname = uigetdir(dataPath,'Get data folder');
+    CSVControlfilename = [CSVControlpathname,filesep,'ControlFile.csv'];
+    % if default named control file doesn't exist
+    if ~isfile(CSVControlfilename)
+        datadir = dir(CSVControlpathname);
+        datadir = struct2table(datadir);
+        datadir = datadir(~datadir.isdir,:);
+        [~,indx] = natsort(datadir.name);
+        datadir = datadir(indx,:);
+        
+        % check for existence of csv files
+        nFiles = length(datadir.name);
+        fileExtensions = cell(nFiles,1);
+        for i = 1:nFiles
+            temp1 = strsplit(datadir.name{i},'.');
+            fileExtensions{i} = temp1{end};
+        end
+        % user might have made their own control file (e.g. prev version)
+        if any(strcmp(fileExtensions,'csv'))
+            temp = uigetfile('*.csv','Select existing Control file',CSVControlpathname);
+            filename = [CSVControlpathname,filesep,temp];
+            CSVControl = readtable(filename);
+            if ~ismember('filename', CSVControl.Properties.VariableNames)
+                P.message.Value{end+1} = 'Please pick a valid csv control file.';
+                scroll(P.message,'bottom')
+                return
+            end
+            [~,indx] = natsort(CSVControl.filename);
+            CSVControl = CSVControl(indx,:);
+            writetable(CSVControl,CSVControlfilename)
+        % otherwise, user has not made a control file yet
+        else
+            % fill in control file information that is known up front, e.g.
+            % instrument type (from file extension) and filename. zpos is
+            % estimated from the filename, assuming it's written in cm
+            CSVControl = DefaultCSVControl(datadir,fileExtensions,CSVControlpathname);
+            writetable(CSVControl,CSVControlfilename)
+        end
+    end
+    CSVControl = readtable(CSVControlfilename);
+    hGUIControl.FilestoCombine.Items = CSVControl.filename;
     % set field values equal to name and path of file
     hGUIControl.CSVControlpathname.Text = CSVControlpathname;
-    hGUIControl.CSVControlfilename.Text = CSVControlfilename;
-    
+    hGUIControl.CSVControlfilename.Text = 'ControlFile.csv';
+    % add data input folder to the path
+    addpath(genpath(CSVControlpathname))
     % set and create output directory (odir) 
-    odir = [CSVControlpathname,'MITT Filtered Data'];
+    odir = [CSVControlpathname,filesep,'MITT Filtered Data'];
     % check for existance of odir
     chk1 = dir(odir);
     % if odir does not exist
@@ -80,18 +91,25 @@ function hgetfileCallback(~, ~, ~)
         % make it
         mkdir(odir);
     end
-
-    % save odir to pltLaunch
-    setappdata(pltLaunch.FigureHandle,'odir',odir)
-    % change message
-    P.message.Value = {'New file selected'};
+    % add odir to the path
+    addpath(odir)
+    % save odir to the figure
+    f.UserData.odir = odir;
+    % start new message chain
+    P.message.Value = {'New data path selected'};
     % turn on Select button
     P.Select.Visible = 'on';
+f.UserData.CSVControl = CSVControl;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 
 %% Computation block control
 % to turn on/off Organization block
 function hOrganizeCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get values of buttons on computational block
     yOrg = hGUIControl.Organize.Value;
     yClean = hGUIControl.Clean.Value;
@@ -103,17 +121,13 @@ function hOrganizeCallback(~, ~, ~)
         % turn Run button on
         P.run.Enable = 'on';
         % change message
-        text = P.message.Value;
-        text{end+1} = 'Organize block ON';
-        P.message.Value = text;
+        P.message.Value{end+1} = 'Organize block ON';
         scroll(P.message,'bottom')
     else
         % make the panel invisible
         P.Organize.Visible = 'off';
         % change message
-        text = P.message.Value;
-        text{end+1} = 'Organize block OFF';
-        P.message.Value = text;
+        P.message.Value{end+1} = 'Organize block OFF';
         scroll(P.message,'bottom')
         % if no block is active
         if ~(yClean||yClassify)
@@ -121,9 +135,14 @@ function hOrganizeCallback(~, ~, ~)
             P.run.Enable = 'off';
         end
     end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to turn on/off Clean block
 function hCleanCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get values of buttons on computational block
     yOrg = hGUIControl.Organize.Value;
     yClean = hGUIControl.Clean.Value;
@@ -136,9 +155,7 @@ function hCleanCallback(~, ~, ~)
         % turn Run button on
         set(P.run,'Enable','on');
         % change message
-        text = P.message.Value;
-        text{end+1} = 'Clean block ON';
-        P.message.Value = text;
+        P.message.Value{end+1} = 'Clean block ON';
         scroll(P.message,'bottom')
     else
         % make the panel invisible
@@ -146,9 +163,7 @@ function hCleanCallback(~, ~, ~)
         set(P.SpikeOptions,'Visible','off');
         set(P.FilterOptions,'Visible','off');
         % change message
-        text = P.message.Value;
-        text{end+1} = 'Clean block OFF';
-        P.message.Value = text;
+        P.message.Value{end+1} = 'Clean block OFF';
         scroll(P.message,'bottom')
         % if no block is active
         if ~(yOrg||yClassify)
@@ -156,9 +171,15 @@ function hCleanCallback(~, ~, ~)
             set(P.run,'Enable','off');
         end
     end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to turn on/off Classify block
 function hClassifyCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+faQC = f.UserData.faQC;
     % get values of buttons on computational block
     yOrg = hGUIControl.Organize.Value;
     yClean = hGUIControl.Clean.Value;
@@ -169,75 +190,200 @@ function hClassifyCallback(~, ~, ~)
         % set default values
         faQC = subSetValues(faQC,faQCdefault);
         % make the panel visible
-        set(P.Classify,'Visible','on');
+        P.Classify.Visible = 'on';
         P.faQCOptions.Visible = 'on';
+        P.Visualize.Visible = 'on';
         % turn Run button on
-        set(P.run,'Enable','on');
+        P.run.Enable = 'on';
         % change message
-        text = P.message.Value;
-        text = string(text);
-        text{end+1} = 'Classify block ON';
-        P.message.Value = text;
+        P.message.Value{end+1} = 'Classify block ON';
         scroll(P.message,'bottom')
     else
         % make the panel invisible
         set(P.Classify,'Visible','off');
         P.faQCOptions.Visible = 'off';
         % change message
-        text = P.message.Value;
-        text{end+1} = 'Classify block OFF';
-        P.message.Value = text;
+        P.message.Value{end+1} = 'Classify block OFF';
         scroll(P.message,'bottom')
         % if no block is active
         if ~(yClean||yOrg)
             set(P.run,'Enable','off'); % turn Run button off
         end
     end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
+f.UserData.faQC = faQC;
 end
 
 %% Organization Control Panel
+% to edit the csv control file
+function hEditCSVCallback(~,~,~)
+% Known bug for editing the CSV where editing directly from excel screws up
+% the dates. To fix this, could simply store the date as a datenum or
+% unixtime. Annoying.
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+    fcsv = figure(WindowState='maximized',...
+                  Name='CSV Editing Window');
+    pause(1) % allow figure to open
+    % load csv control from its file location
+    CSVControlpathname = hGUIControl.CSVControlpathname.Text;
+    CSVControlfilename = hGUIControl.CSVControlfilename.Text;
+    CSVControl = readtable([CSVControlpathname,filesep,CSVControlfilename]);
+    t = uitable(fcsv,Data=CSVControl);
+    t.Position = [0 0 fcsv.Position(3) fcsv.Position(4)];
+    t.ColumnEditable = true;
+    t.CellEditCallback = @hCellEditCallback;
+    t.UserData = f;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
+end
+% save the data edits to the figure and the ControlFile
+function hCellEditCallback(src,~,~)
+t = src;
+f = t.UserData;
+hGUIControl = f.UserData.hGUIControl;
+CSVControl = t.Data;
+CSVControlpathname = hGUIControl.CSVControlpathname.Text;
+CSVControlfilename = hGUIControl.CSVControlfilename.Text;
+writetable(CSVControl,[CSVControlpathname,filesep,CSVControlfilename])
+f.UserData.CSVControl = CSVControl;
+end
+% to combine files before organization occurs
+function hCombineFilesCallback(~,~,~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+    yCheck = hGUIControl.CombineFiles.Value;
+    P.Combine.Visible = yCheck;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
+end
+% to react to files selected by the user
+function hFileCombineCallback(~,~,~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+CSVControl = f.UserData.CSVControl;
+CSVControlfilename = hGUIControl.CSVControlfilename.Text;
+CSVControlpathname = hGUIControl.CSVControlpathname.Text;
+    files = hGUIControl.FilestoCombine.Value;
+    IsSelected = ismember(CSVControl.filename,files);
+    ins = CSVControl.instrument(IsSelected);
+    % files selected must be VectrinoII's and must be more than one file
+    if all(strcmp(ins,'VectrinoII')) || length(ins) > 1
+        startTime = zeros(length(files),1);
+        for i = 1:length(files)
+            file = [CSVControlpathname,filesep,files{i}];
+            load(file,'Config')
+            startTime(i) = Config.startCollectionTime_seconds + Config.startCollectionTime_subseconds;
+        end
+        if range(startTime) == 0
+            AllStruct = struct();
+            % load each file and save its raw data in AllStruct
+            for i = 1:length(files)
+                file = [CSVControlpathname,filesep,files{i}];
+                load(file,'Data','Config')
+                AllStruct(i).Data = Data;
+                AllStruct(i).Config = Config;
+            end
+            [Data,Config] = CombineFiles(AllStruct);
+            % save into the data folder under a new name
+            ySame = (files{1}-files{2}) == 0;
+            defname = files{1}(ySame);
+            if isempty(defname)
+                defname = 'Combined File';
+            end
+            combinedFilename = uiputfile('*.mat','Save combined file',[CSVControlpathname,filesep,defname]);
+            P.message.Value{end+1} = 'Saving combined file...';
+            scroll(P.message,'bottom')
+            pause(1) % allow message to pop up
+            save([CSVControlpathname,filesep,combinedFilename],'Config','Data')
+            P.message.Value{end+1} = 'Done';
+            scroll(P.message,'bottom')
+
+            % move old files to a new folder called 'Uncombined Files'
+            uncombinedFolder = [CSVControlpathname,filesep,'Uncombined Files'];
+            if ~isfolder(uncombinedFolder)
+                mkdir(uncombinedFolder)
+            end
+            for i = 1:length(files)
+                file = [CSVControlpathname,filesep,files{i}];
+                movefile(file,uncombinedFolder)
+            end
+            % update the csv control file to reflect the change
+            IsCombined = ismember(CSVControl.filename,files);
+            datarow = CSVControl(IsCombined,:);
+            datarow = datarow(1,:);
+            datarow.filename = combinedFilename;
+            datarow.zpos = NumFromString(datarow.filename);
+            CSVControl(IsCombined,:) = [];
+            CSVControl = [CSVControl;datarow];
+            CSVControl = sortrows(CSVControl,'filename');
+            writetable(CSVControl,[CSVControlpathname,filesep,CSVControlfilename])
+            % update GUI to reflect the change, i.e. the FiletoCombine list
+            hGUIControl.FilestoCombine.Items = CSVControl.filename;
+            hGUIControl.FilestoCombine.Value = combinedFilename;
+        else
+            P.message.Value{end+1} = 'Files are not from the same data collection';
+            scroll(P.message,'bottom')
+        end
+    else
+        P.message.Value{end+1} = 'This function only works for the VectrinoII';
+        scroll(P.message,'bottom')
+    end
+f.UserData.CSVControl = CSVControl;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
+end
 % to control whether geometry is defined as part of organization or not
 function hDefineGeometryCallback(~, ~, ~)
-    % get checkmark value
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+    % get checkbox value
     yCheck = get(hGUIControl.DefineGeometry,'Value');
-    % if it is checked
+
+    % run logic for channeltype / preset
+    hGUIControl.ChannelType.Visible = yCheck;
+    P.Uniform.Visible = yCheck;
+    P.NonUniform.Visible = yCheck;
     if yCheck
-        % enable uniform/nonuniform channel panel
-        set(hGUIControl.ChannelType,'Visible','on');
-        set(P.run,'Enable','off');% turn Run button off
-    % if it is unchecked 
-    else
-        % turn off panels
-        set(hGUIControl.ChannelType,'Visible','off');
-        set(P.Uniform,'Visible','off');
-        set(P.NonUniform,'Visible','off');
-        set(P.run,'Enable','on');% turn Run button on
+        hChannelTypeCallback
+        hChannelPresetCallback
     end
-    hChannelTypeCallback % run logic for default channel type
-    hChannelPresetCallback % run logic for default channel preset
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to identify whether a uniform or non-uniform channel was used
 function hChannelTypeCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get checkmark value
-    channelType = get(hGUIControl.ChannelType,'Value');
+    channelType = hGUIControl.ChannelType.Value;
     % if uniform channel
     if strcmp(channelType,'Uniform')
         % turn off nonuniform panel
         set(P.NonUniform,'Visible','off');
         % turn on uniform panel
         set(P.Uniform,'Visible','on');
-        set(P.run,'Enable','on');% turn Run button on
     % else it's a non-uniform channel
     else
         % turn off uniform panel
         set(P.Uniform,'Visible','off');
         % turn on nonuniform panel
         set(P.NonUniform,'Visible','on');
-        set(P.run,'Enable','off');% turn Run button off
-    end            
+    end  
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to set channel values for defined preset(s)
 function hChannelPresetCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     channelPreset = hGUIControl.ChannelPreset.Value;
     vals = DefaultChannels(channelPreset);
     hGUIControl = subSetValues(hGUIControl,vals);
@@ -245,37 +391,57 @@ function hChannelPresetCallback(~, ~, ~)
     hWidthCallback
     hDepthCallback
     hLengthCallback
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % set of fields that gets data about channel geometry
 % to get the length of the test section
 function hLengthCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get length (in m)
     L = hGUIControl.Length.Value;
     % calculate and set default grid spacing (in m)
     l = L/100;
     hGUIControl.Lengthgrid.Value = l;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to get the width of the test section
 function hWidthCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get width (in m)
     B = hGUIControl.Width.Value;
     % calculate and set default grid spacing (in m)
     b = B/100;
     hGUIControl.Widthgrid.Value = b;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to get the depth of the test section
 function hDepthCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get depth (in m)
     H = hGUIControl.Depth.Value;
     % calculate and set default grid spacing (in m)
     h = H/100;
     hGUIControl.Depthgrid.Value = h;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to get a *.csv file of scattered channel geometry or an *.m file that
 % calculates the geometry
 function hgetCalcChannelfileCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get value of listbox
-    ChannelDefinition = get(hGUIControl.ChannelDefinition,'Value');
+    ChannelDefinition = hGUIControl.ChannelDefinition.Value;
     if strcmp(ChannelDefinition,'CSV File')
         % get channel and path name
         [channelname, channelpathname] = uigetfile({'*.csv';'*.txt'},'Get channel geometry *.csv file');
@@ -286,9 +452,14 @@ function hgetCalcChannelfileCallback(~, ~, ~)
     % set channel and path name values to edit fields
     hGUIControl.CalcChannelpathname.Text = channelpathname;
     hGUIControl.CalcChannelfile.Text = channelname;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to control how sampling locations are entered
 function hSamplingCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     yCheck = get(hGUIControl.Sampling,'Value');
     % if custom subprogram is to be used
     if yCheck
@@ -300,22 +471,41 @@ function hSamplingCallback(~, ~, ~)
         % disable window
         set(P.SamplingLocations,'Visible','off');
         set(P.run,'Enable','on');% turn Run button on
-    end            
+    end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to get an *.m program that calculates the sampling location
 function hgetCalcXYZfileCallback(~, ~, ~)
-    % get the name and path of file
-    [xyzname, xyzpathname] = uigetfile({'*.m'},'Get sampling locations subprogram');
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+    % assume user is currently in the MITT folder
+    curpath = pwd;
+    defpath = [curpath,filesep,'CalcXYZFiles'];
+    if ~isfolder(defpath)
+        defpath = '';
+    end
+    [xyzname, xyzpathname] = uigetfile('*.m','Get sampling locations subprogram',defpath);
     % set field values equal to the name and path
     hGUIControl.CalcXYZpathname.Text = xyzpathname;
     hGUIControl.CalcXYZfile.Text = xyzname;
+    % add the folder where CalcXYZ files are located to the path
+    addpath(xyzpathname)
     % turn on Run button
     set(P.run,'Enable','on');
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 
 %% Clean block Control Panel
 % to ask if despiking will be done
 function hDespikeCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
     % get checkmark value
     yCheck = get(hGUIControl.Despike,'Value');
     if yCheck
@@ -324,10 +514,15 @@ function hDespikeCallback(~, ~, ~)
     else
         % disable spike options popup
         set(P.SpikeOptions,'Visible','off');
-    end            
+    end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to control how preprocessing is done
 function hPreprocessCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     Preprocess = get(hGUIControl.Preprocess,'Value');
     % if doing high pass
     if strcmp(Preprocess,'High Pass')
@@ -339,19 +534,22 @@ function hPreprocessCallback(~, ~, ~)
         % disable window
         set(hGUIControl.HighPassTime,'Visible','off');
         set(P.HighPasstext,'Visible','off');
-    end            
+    end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to ask if SpikeARMA will be run
 function hSpikeARMACallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get check mark value
     yCheck = get(hGUIControl.SpikeARMA,'Value');
     if yCheck
         % enable ARMAopts pushbutton
         set(P.ARMAopts,'Enable','on');
-        % get attached ARMAopts info from the pltLaunch figure 
-        ARMAopts = getappdata(pltLaunch.FigureHandle,'ARMAopts');
         % if there is no attached variable called ARMAopts
-        if isempty(ARMAopts)
+        if ~isfield(f.UserData,'ARMAopts')
             % don't allow the run button to be pushed (would cause an
             % error to try to run without ARMAopts
             set(P.run,'Enable','off');
@@ -361,20 +559,33 @@ function hSpikeARMACallback(~, ~, ~)
         set(P.ARMAopts,'Enable','off');
         % turn on the Run button
         set(P.run,'Enable','on');
-    end            
+    end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
 end
 % to run setARMAopts when the ARMAopts button is pushed
 function hARMAoptsCallback(~, ~, ~)
-    % get the ARMAopts data from the figure (can be empty if
-    % setARMAopts has not been run previously)
-    ARMAopts = getappdata(pltLaunch.FigureHandle,'ARMAopts');
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+    ARMAopts = struct();
+    % get the ARMAopts data from the figure if it exists
+    if isfield(f.UserData,'ARMAopts')
+        ARMAopts = f.UserData.ARMAopts;
+    end
     % run the setARMAopts sub function
-    setARMAopts(ARMAopts,pltLaunch);
+    setARMAopts(ARMAopts,f);
     % turn on the Run button
     set(P.run,'Enable','on');
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
+f.UserData.ARMAopts = ARMAopts;
 end
 % to ask if filtering will be done
 function hFiltrBWCallback(~, ~, ~)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
     % get check mark value
     yCheck = get(hGUIControl.FiltrBW,'Value');
     if yCheck
@@ -383,99 +594,183 @@ function hFiltrBWCallback(~, ~, ~)
     else
         % disable filter options popup
         set(P.FilterOptions,'Visible','off');
-    end            
+    end
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
+end
+
+%% Classify block Control Panel
+% show GUIs for data visualization
+function hVisualizeDataCallback(~,event,~)
+    f = gcbf;
+    hGUIControl = f.UserData.hGUIControl;
+    bg = hGUIControl.plotTimeSeries.Parent;
+    yCheck = event.Value;
+    bg.Visible = yCheck;
 end
 
 %% Run
 % when Run button is pushed
 function hrunCallback(~, ~, ~)
-    % get GUIControl parameters from buttons (GUIControl)
+f = gcbf;
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+faQC = f.UserData.faQC;
+    % remove all previous messages
+    P.message.Value = '';
+    % get GUIControl parameters from buttons (hGUIControl)
     GUIControl = subGetValues(hGUIControl,[]);
     % get output directory
-    GUIControl.odir = getappdata(pltLaunch.FigureHandle,'odir');
+    GUIControl.odir = f.UserData.odir;
     % set output filename
     GUIControl.outname = [GUIControl.odir,filesep,GUIControl.CSVControlfilename(1:end-4),'_output.mat'];
     % if SpikeARMA is active
     if GUIControl.SpikeARMA
         % get ARMAopts from figure
-        GUIControl.ARMAopts = getappdata(pltLaunch.FigureHandle,'ARMAopts');
+        GUIControl.ARMAopts = f.UserData.ARMAopts;
     end
     
     % Organize data into Config and Data matrices and save one file for each set of simultaneous data
     if GUIControl.Organize
+        tic
         % change message
-        P.message.Value = 'Organizing data';
-        % pause to allow message change
-        pause(1)
+        P.message.Value{end+1} = 'Organizing data...';
+        scroll(P.message,'bottom')
+        pause(0.01)
         % send to OrganizeInput subprogram
-        OrganizeInput(GUIControl);
+        OrganizeInput(GUIControl,P);
+        TimeToOrganize = toc;
         % change message
-        set(P.message,'Value','Finished')
+        P.message.Value{end+1} = sprintf('    Time to Organize: %1.3fs',TimeToOrganize);
+        P.message.Value{end+1} = 'Done';
+        scroll(P.message,'bottom')
     end
     % files stored in MITTdir
-    GUIControl.MITTdir = dir([GUIControl.odir,filesep,'MITT_*.mat']);
-    GUIControl.MITTdir = struct2table(GUIControl.MITTdir);
+    MITTdir = dir([GUIControl.odir,filesep,'MITT_*.mat']);
+    % store as a table for easier indexing
+    MITTdir = struct2table(MITTdir);
+    % sort in natural file order
+    [~,sortOrder] = natsort(MITTdir.name);
+    MITTdir = MITTdir(sortOrder,:);
+    GUIControl.MITTdir = MITTdir;
 
     % Clean data using the analysis activated in the C structure
     if GUIControl.Clean
         % change message
-        set(P.message,'Value','Cleaning data')
-        % pause to allow message change
-        pause(1)
+        P.message.Value{end+1} = 'Cleaning Data...';
+        scroll(P.message,'bottom')
+        pause(0.01)
+        
+        tic
         % send to CleanSeries subprogram
-        CleanSeries(GUIControl)
+        CleanSeries(GUIControl,P)
+        TimeToClean = toc;
         % change message
-        set(P.message,'Value','Finished')
+        P.message.Value{end+1} = sprintf('    Time to Clean: %1.3fs',TimeToClean);
+        P.message.Value{end+1} = 'Done';
+        scroll(P.message,'bottom')
+        pause(0.01)
     end
     
     if GUIControl.Classify
+        tic
         % get field names (including subFieldnames using subprogram)
         GUIControl.faQC = subGetValues(faQC,[]);
         % automatically run ClassifyArrayAuto
-        set(P.message,'Value','Running automatic quality control analysis')
-        ClassifyArrayAuto(GUIControl)
-        set(P.message,'Value','Finished')
-        % if interactive analysis is selected
-        if GUIControl.plotArray
-            % change message
-            set(P.message,'Value','Interactive analysis GUI is running')
-            % pause to allow message change
-            pause(1)
-            % send to ClassifyArrayGUI subprogram
-            ClassifyArrayGUI(GUIControl,[])
+        P.message.Value{end+1} = 'Running ClassifyArrayAuto...';
+        scroll(P.message,'bottom')
+        pause(0.01)
+        ClassifyArrayAuto(GUIControl,P)
+        TimeToClassify = toc;
+        P.message.Value{end+1} = sprintf('Time to classify: %1.3fs',TimeToClassify);
+        P.message.Value{end+1} = 'Done';
+        scroll(P.message,'bottom')
+        pause(0.01)
+        % if either GUI checkbox is clicked
+        if GUIControl.plotArray || GUIControl.VisualizeData
+            tic
+            P.message.Value{end+1} = 'Loading data for GUI...';
+            scroll(P.message,'bottom')
+            pause(0.01)
+            % Load all the data into one struct, to be used by the 4 GUI's
+            nFtot = length(GUIControl.MITTdir.name);
+            AllStruct = struct();
+            for nF = 1:nFtot
+                P.message.Value{end+1} = ['    ',GUIControl.MITTdir.name{nF}];
+                scroll(P.message,'bottom')
+                pause(0.01)
+                inname = [GUIControl.odir,filesep,GUIControl.MITTdir.name{nF}];
+                load(inname,'Config','Data');
+                AllStruct(nF).Config = Config;
+                AllStruct(nF).Data = Data;
+            end
+            TimeToLoad = toc;
+            P.message.Value{end+1} = sprintf('Time to load: %1.3fs',TimeToLoad);
+            P.message.Value{end+1} = 'Done';
+            scroll(P.message,'bottom')
+            if GUIControl.plotArray
+                % send to ClassifyArrayGUI subprogram
+                P.message.Value{end+1} = 'Creating the interactive analysis GUI...';
+                scroll(P.message,'bottom')
+                pause(0.01)
+                ClassifyArrayGUI(GUIControl,AllStruct)
+                P.message.Value{end+1} = 'Done';
+                scroll(P.message,'bottom')
+            end
+            if GUIControl.VisualizeData
+                Config = AllStruct(1).Config;
+                Acolor = [0,0,1;
+                          0,1,0;
+                          1,0,0]; % blue, green, red
+                yAnalysis = [true,Config.Despiked,Config.Filtered];
+                def = struct();
+                def.FileItems = GUIControl.MITTdir.name;
+                def.FileValue = GUIControl.MITTdir.name{1};
+                def.AnalysisValue = [true,false,false];
+                def.AnalysisVisible = yAnalysis;
+                def.AnalysisColors = Acolor;
+                def.CellValue = 1;
+                def.CellMin = 1;
+                def.CellMax = Config.nCells;
+                if GUIControl.plotTimeSeries
+                    % send to plotTimeSeries subprogram
+                    PlotTimeSeries(AllStruct,def)
+                elseif GUIControl.plotTimeSpace
+                    % send to plotTimeSpace subprogram
+                    PlotTimeSpace(AllStruct,def)
+                elseif GUIControl.plotSpectrum
+                    % send to plotSpectrum subprogram
+                    PlotSpectrum(AllStruct,def)
+                end
+            end
         end
+
     end
-end
-     
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
+f.UserData.GUIControl = GUIControl;
 end
 
-%%
-% to create the pltLaunch (initial MITT screen) Figure 
-function pltLaunch = CreatepltLaunch 
+%% UI creation functions
+% to create the uifigure (initial MITT screen) 
+function f = CreateUIFigure 
 % this subprogram only includes the figures and axes, not the buttons
-
 % create the figure and set its properties
 f = uifigure();
     f.WindowState = 'maximized';
-    f.Name = 'MITT GUI for Data Quality Control';
-nPanels = 3;
-pnl = gobjects(1,3);
-uigl = uigridlayout(f,[1,nPanels]);
-    uigl.BackgroundColor = ([204 108 231])/255; % purple
-for i = 1:nPanels
-    pnl(i) = uipanel(uigl,'Units','normalized');
+    f.Name = 'MITT Figure';
+grid = uigridlayout(f,[3,3],...
+    RowSpacing = 5,...
+    ColumnSpacing = 5,...
+    Padding = 5,...
+    BackgroundColor = ([204 108 231])/255,... % purple
+    RowHeight = {'fit','fit','1x'});
+f.UserData.Grid = grid;
 end
 
-pltLaunch.FigureHandle = f;
-pltLaunch.PanelHandles = pnl;
-end
-
-%%
 % to create buttons & fields on input control figure
-function [P,GUIControl,faQC] = makeUIControls(pltLaunch)
-f = pltLaunch.FigureHandle;
-pnl = pltLaunch.PanelHandles;
-
+function f = MakeUIControls(f)
+grid = f.UserData.Grid;
 % defaults across the GUI
 Fsize = 12;
 Fname = 'Calibri';
@@ -483,6 +778,10 @@ backcol = [220 220 220]/255; % used on level 1 boxes
 backcol2 = [190 255 255]/255; % used on panels
 btn.width = 100;
 btn.height = 25;
+% defaults for grids
+def.Grid.RowSpacing = 5;
+def.Grid.ColumnSpacing = 5;
+def.Grid.Padding = 5;
 % defaults for uipanel
 def.Panel.Title = '';
 def.Panel.FontSize = Fsize;
@@ -511,58 +810,24 @@ def.Dropdown.FontName = Fname;
 def.Editfield.FontSize = Fsize;
 def.Editfield.FontName = Fname;
 def.Editfield.HorizontalAlignment = 'center';
+% defaults for uilistbox
+def.Listbox.FontSize = Fsize;
+def.Listbox.FontName = Fname;
+def.Listbox.Multiselect = 'on';
 
-%%%% First panel
-% grid
-grid = uigridlayout(pnl(1),[4,1]);
-    grid.RowHeight = {'fit','1x','fit','fit'};
-
-%%% Title block
-P.figtitle = uilabel(grid,def.Label, ...
-    Text = 'MITT',...
+%%%% Title block
+P.Figtitle = uilabel(grid,def.Label, ...
+    Text = 'MITT - GUI for Data Quality Control',...
     FontColor = 'b',...
     BackgroundColor = 'w',...
     FontSize = 40);
+    P.Figtitle.Layout.Column = [1,3];
 
-%%% File and Message Center
-% sub-panel
-P.File = uipanel(grid,def.Panel, ...
-    Title = 'File and message center');
-% sub-grid
-grid1 = uigridlayout(P.File,[3,2],...
-    RowHeight = {btn.height,btn.height,'1x'},...
-    ColumnWidth = {btn.width,'1x'},...
-    RowSpacing = 0,...
-    ColumnSpacing = 0,...
-    Padding = 0);
-% file selection pushbutton
-P.getfile = uibutton(grid1,def.Button, ...
-    Text = 'Select File');
-% CSVControl filename textbox
-GUIControl.CSVControlfilename = uilabel(grid1,def.Label, ...
-    BackgroundColor = backcol,...
-    HorizontalAlignment = 'left');
-% CSVControl pathname textbox
-GUIControl.CSVControlpathname = uilabel(grid1,def.Label, ...
-    BackgroundColor = backcol,...
-    HorizontalAlignment = 'left');
-    GUIControl.CSVControlpathname.Layout.Column = [1,2];
-% message textbox
-P.message = uitextarea(grid1,...
-    FontSize = Fsize,...
-    FontName = Fname,...
-    BackgroundColor = backcol2,...
-    HorizontalAlignment = 'left',...
-    Editable = 'off');
-    P.message.Layout.Column = [1,2];
-
-%%% Computational Block Control
-% sub-panel
+%%%% Start - Computational Block Control
 P.Select = uipanel(grid,def.Panel, ...
     Title = 'Computational block control');
-% sub-grid
-grid1 = uigridlayout(P.Select,[3,1],...
-    RowHeight = {btn.height,btn.height,btn.height},...
+    P.Select.Layout.Column = [1,3];
+grid1 = uigridlayout(P.Select,[1,3],def.Grid,...
     RowSpacing = 1);
 % Organization block checkbox
 GUIControl.Organize = uicheckbox(grid1,def.Checkbox, ...
@@ -573,42 +838,82 @@ GUIControl.Clean = uicheckbox(grid1,def.Checkbox, ...
 % Classify block checkbox
 GUIControl.Classify = uicheckbox(grid1,def.Checkbox, ...
     Text = 'Classify quality of time series');
+%%%% End - Computational Block Control
 
+%%%% Start - Organization panel
+grid1 = uigridlayout(grid,[2,1],def.Grid,...
+    RowHeight = {'fit','fit'});
+%%% File and Message Center
+P.File = uipanel(grid1,def.Panel, ...
+    Title = 'File and message center');
+grid2 = uigridlayout(P.File,[3,2],def.Grid,...
+    RowHeight = {btn.height,btn.height,'1x'},...
+    ColumnWidth = {btn.width,'1x'},...
+    RowSpacing = 0,...
+    ColumnSpacing = 0,...
+    Padding = 0);
+% file selection pushbutton
+P.getfile = uibutton(grid2,def.Button, ...
+    Text = 'Select File');
+% CSVControl filename textbox
+GUIControl.CSVControlfilename = uilabel(grid2,def.Label, ...
+    BackgroundColor = backcol,...
+    HorizontalAlignment = 'left');
+% CSVControl pathname textbox
+GUIControl.CSVControlpathname = uilabel(grid2,def.Label, ...
+    BackgroundColor = backcol,...
+    HorizontalAlignment = 'left');
+    GUIControl.CSVControlpathname.Layout.Column = [1,2];
+% message textbox
+P.message = uitextarea(grid2,...
+    FontSize = Fsize,...
+    FontName = Fname,...
+    BackgroundColor = backcol2,...
+    HorizontalAlignment = 'left',...
+    Editable = 'off');
+    P.message.Layout.Column = [1,2];
 %%% Organization Block Options
-% sub-panel
-P.Organize = uipanel(grid,def.Panel, ...
+P.Organize = uipanel(grid1,def.Panel, ...
     Title = 'Organization block options');
-% sub-grid
-grid1 = uigridlayout(P.Organize,[5,1],...
-    RowHeight = {btn.height,btn.height,btn.height,'1x','1x'},...
-    RowSpacing = 1);
-% Define geometry checkbox
-GUIControl.DefineGeometry = uicheckbox(grid1,def.Checkbox, ...
-    Text = 'Define channel geometry');
-% Subprogram to calculate sampling locations checkbox
-GUIControl.Sampling = uicheckbox(grid1,def.Checkbox, ...
-    Text = 'Custom algorithm to define sampling locations');
-% uniform/nonuniform popup
-GUIControl.ChannelType = uidropdown(grid1,def.Dropdown, ...
+grid2 = uigridlayout(P.Organize,[8,1],def.Grid,...
+    RowHeight = {btn.height,btn.height,btn.height*5,btn.height,btn.height,'fit',btn.height,'fit'});
+% edit csv file button
+GUIControl.EditCSV = uibutton(grid2,def.Button,...
+    Text = 'Edit CSV File');
+% Combine files checkbox
+GUIControl.CombineFiles = uicheckbox(grid2,def.Checkbox, ...
+    Text = 'Combine split files');
+%%% Combine files
+P.Combine = uipanel(grid2,def.Panel, ...
+    Title = 'Combine files',...
+    FontAngle = 'italic');
+grid3 = uigridlayout(P.Combine,[2,2],def.Grid,...
+    RowHeight = {'1x',btn.height},...
+    ColumnWidth = {'1x',btn.width});
+GUIControl.FilestoCombine = uilistbox(grid3,def.Listbox);
+    GUIControl.FilestoCombine.Layout.Row = [1,2];
+P.FileCombine = uibutton(grid3,def.Button,...
+    Text = 'Combine');
+% uniform/nonuniform dropdown
+GUIControl.ChannelType = uidropdown(grid2,def.Dropdown, ...
     Items = {'Uniform','Non-uniform'});
+% Define geometry checkbox
+GUIControl.DefineGeometry = uicheckbox(grid2,def.Checkbox, ...
+    Text = 'Define channel geometry');
 %%% Uniform channel dimensions
-% sub-sub-panel
-P.Uniform = uipanel(grid1,def.Panel, ...
+P.Uniform = uipanel(grid2,def.Panel, ...
     Title = 'Uniform channel dimensions',...
     FontAngle = 'italic');
-% sub-sub-grid
-grid2 = uigridlayout(P.Uniform,[3,10],...
+grid3 = uigridlayout(P.Uniform,[3,10],def.Grid,...
     RowHeight = {btn.height,btn.height,btn.height},...
-    ColumnWidth = repmat({btn.height,'1x'},[1,5]),...
-    RowSpacing = 2,...
-    ColumnSpacing = 2);
+    ColumnWidth = repmat({btn.height,'1x'},[1,5]));
 % state channel type (only trapezoidal is available - including rectangular with m = 0
 % and triangular with B = 0)
-P.UniformTypename = uilabel(grid2,def.Label, ...
+P.UniformTypename = uilabel(grid3,def.Label, ...
     Text = 'Trapezoidal channel with origin at u\s centerline',...
     HorizontalAlignment = 'left');
     P.UniformTypename.Layout.Column = [1,8];
-GUIControl.ChannelPreset = uidropdown(grid2,def.Dropdown,...
+GUIControl.ChannelPreset = uidropdown(grid3,def.Dropdown,...
     Items = {'LABS','LABM','LABL','WELL'});
     GUIControl.ChannelPreset.Layout.Column = [9,10];
 % create series of labels and text boxes for channel dimensions
@@ -616,274 +921,360 @@ GUIControl.ChannelPreset = uidropdown(grid2,def.Dropdown,...
 % experimental section, m = sideslope (ratio of mH:1V)
 % slope
 def.Label.HorizontalAlignment = 'right'; % change for this set of values
-P.Slopename = uilabel(grid2,def.Label,Text='S: ');
-GUIControl.Slope = uieditfield(grid2,'numeric',def.Editfield);
+P.Slopename = uilabel(grid3,def.Label,Text='S: ');
+GUIControl.Slope = uieditfield(grid3,'numeric',def.Editfield);
 % width
-P.Widthname = uilabel(grid2,def.Label,Text='B: ');
-GUIControl.Width = uieditfield(grid2,'numeric',def.Editfield);
+P.Widthname = uilabel(grid3,def.Label,Text='B: ');
+GUIControl.Width = uieditfield(grid3,'numeric',def.Editfield);
 % depth
-P.Depthname = uilabel(grid2,def.Label,Text='Z: ');
-GUIControl.Depth = uieditfield(grid2,'numeric',def.Editfield);
+P.Depthname = uilabel(grid3,def.Label,Text='Z: ');
+GUIControl.Depth = uieditfield(grid3,'numeric',def.Editfield);
 % length
-P.Lengthname = uilabel(grid2,def.Label,Text='L: ');
-GUIControl.Length = uieditfield(grid2,'numeric',def.Editfield);
+P.Lengthname = uilabel(grid3,def.Label,Text='L: ');
+GUIControl.Length = uieditfield(grid3,'numeric',def.Editfield);
 % sideslope
-P.Sideslopename = uilabel(grid2,def.Label,Text='m: ');
-GUIControl.Sideslope = uieditfield(grid2,'numeric',def.Editfield);
+P.Sideslopename = uilabel(grid3,def.Label,Text='m: ');
+GUIControl.Sideslope = uieditfield(grid3,'numeric',def.Editfield);
 % specify grid sizes for 1D and 2D interpolants where the lateral, vertical
 % and streamwise grid sizes are represented by b, h, and l, respectively
-P.Gridname = uilabel(grid2,def.Label,Text='Grid Size');
+P.Gridname = uilabel(grid3,def.Label,Text='Grid Size');
     P.Gridname.HorizontalAlignment = 'center';
     P.Gridname.Layout.Column = [1,2];
 % widthgrid
-P.Widthgridname = uilabel(grid2,def.Label,Text='bg: ');
-GUIControl.Widthgrid = uieditfield(grid2,'numeric',def.Editfield);
+P.Widthgridname = uilabel(grid3,def.Label,Text='bg: ');
+GUIControl.Widthgrid = uieditfield(grid3,'numeric',def.Editfield);
 % depthgrid
-P.Depthgridname = uilabel(grid2,def.Label,Text='zg: ');
-GUIControl.Depthgrid = uieditfield(grid2,'numeric',def.Editfield);
+P.Depthgridname = uilabel(grid3,def.Label,Text='zg: ');
+GUIControl.Depthgrid = uieditfield(grid3,'numeric',def.Editfield);
 % lengthgrid
-P.Lengthgridname = uilabel(grid2,def.Label,Text='lg: ');
-GUIControl.Lengthgrid = uieditfield(grid2,'numeric',def.Editfield);
+P.Lengthgridname = uilabel(grid3,def.Label,Text='lg: ');
+GUIControl.Lengthgrid = uieditfield(grid3,'numeric',def.Editfield);
 def.Label.HorizontalAlignment = 'center'; % return to default
 
 %%% Non-uniform channel properties panel
 % sub-panel
-P.NonUniform = uipanel(grid1,def.Panel, ...
+P.NonUniform = uipanel(grid2,def.Panel, ...
     Title = 'Specify a non-uniform channel',...
     FontAngle = 'italic');
-    P.NonUniform.Layout.Row = 4; % takes up same space as the uniform channel block
+    P.NonUniform.Layout.Row = P.Uniform.Layout.Row; % takes up same space as the uniform channel block
 % sub-sub-grid
-grid2 = uigridlayout(P.NonUniform,[3,2],...
+grid3 = uigridlayout(P.NonUniform,[3,2],def.Grid,...
     RowHeight = {btn.height,btn.height,btn.height},...
     RowSpacing = 0,...
-    ColumnSpacing = 0);
+    ColumnSpacing = 0,...
+    Padding = 0);
 % text box for csv/subprogram option
-P.Channeltext = uilabel(grid2,def.Label, ...
+P.Channeltext = uilabel(grid3,def.Label, ...
     Text = 'Channel coordinates defined in:');
 % csv/subprogram popup
-GUIControl.ChannelDefinition = uidropdown(grid2,def.Dropdown, ...
+GUIControl.ChannelDefinition = uidropdown(grid3,def.Dropdown, ...
     Items = {'CSV File','Subprogram'}, ...
     Value = 'CSV File');
 % select file pushbutton
-GUIControl.getCalcChannelfile = uibutton(grid2,def.Button, ...
+GUIControl.getCalcChannelfile = uibutton(grid3,def.Button, ...
     Text = 'Select program/csv file');
 % selected file name text box
-GUIControl.CalcChannelfile = uilabel(grid2,def.Label, ...
+GUIControl.CalcChannelfile = uilabel(grid3,def.Label, ...
     BackgroundColor=backcol);
 % selected file path name text box
-GUIControl.CalcChannelpathname = uilabel(grid2,def.Label, ...
+GUIControl.CalcChannelpathname = uilabel(grid3,def.Label, ...
     Backgroundcolor=backcol);
     GUIControl.CalcChannelpathname.Layout.Column = [1,2];
-
+% Subprogram to calculate sampling locations checkbox
+GUIControl.Sampling = uicheckbox(grid2,def.Checkbox, ...
+    Text = 'Custom algorithm to define sampling locations');
 %%% Custom subprogram to calculate sampling locations panel
 % sub-panel
-P.SamplingLocations = uipanel(grid1,def.Panel,Title='Sampling locations algorithm',FontAngle='italic');
+P.SamplingLocations = uipanel(grid2,def.Panel,Title='Sampling locations algorithm',FontAngle='italic');
 % sub-sub-grid
-grid2 = uigridlayout(P.SamplingLocations,[2,2]);
-set(grid2, ...
+grid3 = uigridlayout(P.SamplingLocations,[2,2],def.Grid,...
     RowHeight = {btn.height,btn.height}, ...
     ColumnWidth = {'1x','1x'},...
     RowSpacing = 0,...
-    ColumnSpacing = 0)
+    ColumnSpacing = 0,...
+    Padding = 0);
 % select file pushbutton
-GUIControl.getCalcXYZfile = uibutton(grid2,def.Button,Text='Select');
+GUIControl.getCalcXYZfile = uibutton(grid3,def.Button,Text='Select');
 % selected file name text box
-GUIControl.CalcXYZfile = uilabel(grid2,def.Label,BackgroundColor=backcol);
+GUIControl.CalcXYZfile = uilabel(grid3,def.Label,BackgroundColor=backcol);
 % selected file path name text box
-GUIControl.CalcXYZpathname = uilabel(grid2,def.Label,BackgroundColor=backcol);
+GUIControl.CalcXYZpathname = uilabel(grid3,def.Label,BackgroundColor=backcol);
     GUIControl.CalcXYZpathname.Layout.Column = [1,2];
-
+%%%% End - Organization panel
 
 
 %%%% Second panel
 % grid
-grid = uigridlayout(pnl(2),[3,1]);
-    grid.RowHeight = {'fit','fit','fit'};
-
+grid1 = uigridlayout(grid,[3,1],def.Grid);
+    grid1.RowHeight = {'fit','fit','fit'};
 %%% Clean block options
 % panel
-P.Clean = uipanel(grid,def.Panel,Title='Clean block options');
+P.Clean = uipanel(grid1,def.Panel,Title='Clean block options');
 % sub-grid
-grid1 = uigridlayout(P.Clean,[4,1]);
-    grid1.RowHeight = repmat({btn.height},[4,1]);
-    grid1.RowSpacing = 0;
-    grid1.ColumnSpacing = 0;
+grid2 = uigridlayout(P.Clean,[4,1],def.Grid,...
+    RowHeight = repmat({btn.height},[4,1]));
 % reset any existing despiked and/or filtered time series checkbox
-GUIControl.SpikeReset = uicheckbox(grid1,def.Checkbox,Text='Reset despiked and/or filtered time series');
-% plot time series
-GUIControl.plotTimeSeries = uicheckbox(grid1,def.Checkbox,Text='Plot all time series');
+GUIControl.SpikeReset = uicheckbox(grid2,def.Checkbox,Text='Reset despiked and/or filtered time series');
 % perform despiking
-GUIControl.Despike = uicheckbox(grid1,def.Checkbox,Text='Despike');
+GUIControl.Despike = uicheckbox(grid2,def.Checkbox,Text='Despike');
 % perform filtering
-GUIControl.FiltrBW = uicheckbox(grid1,def.Checkbox,Text='Frequency filter');
+GUIControl.FiltrBW = uicheckbox(grid2,def.Checkbox,Text='Frequency filter');
 
 %%% Spike options panel
 % panel
-P.SpikeOptions = uipanel(grid,def.Panel,...
+P.SpikeOptions = uipanel(grid1,def.Panel,...
     Title = 'Despike options',...
     FontAngle='italic');
 % sub-grid
-grid1 = uigridlayout(P.SpikeOptions,[9,2],...
-    RowHeight = [5*btn.height;repmat({btn.height},[8,1])], ...
-    RowSpacing = 0, ...
+grid2 = uigridlayout(P.SpikeOptions,[9,2],def.Grid,...
+    RowHeight = ['fit',repmat({btn.height},[1,8])],...
+    RowSpacing = 0,...
     ColumnSpacing = 0);
-% sub-panel
-P.Preprocess = uipanel(grid1,def.Panel, ...
+P.Preprocess = uipanel(grid2,def.Panel, ...
     Title = 'Pre-processing',...
     FontAngle = 'italic',...
     ForegroundColor = 'k');
     P.Preprocess.Layout.Column = [1,2];
-
-% sub-sub-grid
-grid2 = uigridlayout(P.Preprocess,[3,4],...
-    RowHeight = {btn.height,btn.height,btn.height}, ...
-    RowSpacing = 0, ...
-    ColumnSpacing = 0);
+grid3 = uigridlayout(P.Preprocess,[3,4],def.Grid,...
+    RowHeight = {btn.height,btn.height,btn.height});
 % switch to beam velocitites for spike detection rather than orthogonal components
-GUIControl.switch2beam = uicheckbox(grid2,def.Checkbox,...
+GUIControl.switch2beam = uicheckbox(grid3,def.Checkbox,...
     Text = 'Use beam veocities?');
     GUIControl.switch2beam.Layout.Column = [1,4];
 % preprocess popup
-GUIControl.pctmodetext = uilabel(grid2,def.Label, ...
+GUIControl.pctmodetext = uilabel(grid3,def.Label, ...
     Text = 'Classify Mode threshold');
     GUIControl.pctmodetext.Layout.Column = [1,2];
 % mode edit field
-GUIControl.pctmode = uieditfield(grid2,'numeric',def.Editfield, ...
+GUIControl.pctmode = uieditfield(grid3,'numeric',def.Editfield, ...
     Value = 20,...
     ValueDisplayFormat = '%0.1f %%');
     GUIControl.pctmode.Layout.Column = [3,4];
 % trend removal text
-GUIControl.Preprocesstext = uilabel(grid2,def.Label, ...
+GUIControl.Preprocesstext = uilabel(grid3,def.Label, ...
     Text = 'Trend Removal');
 % trend removal dropdown
-GUIControl.Preprocess = uidropdown(grid2,def.Dropdown, ...
+GUIControl.Preprocess = uidropdown(grid3,def.Dropdown, ...
     Items = {'Median','Linear','High Pass'});
 % high pass time edit field
-GUIControl.HighPassTime = uieditfield(grid2,'numeric',def.Editfield, ...
+GUIControl.HighPassTime = uieditfield(grid3,'numeric',def.Editfield, ...
     Value = 5,...
     ValueDisplayFormat = '%0.1f (s)',...
     Visible = 'off');
 % high pass label
-P.HighPasstext = uilabel(grid2,def.Label, ...
+P.HighPasstext = uilabel(grid3,def.Label, ...
     Text = 'windowSize',...
     Visible = 'off');
 
 % spike method label
-P.SpikeMethod = uilabel(grid1,def.Label, ...
+P.SpikeMethod = uilabel(grid2,def.Label, ...
     Text = 'Despiking Method(s)',...
     HorizontalAlignment = 'left',...
     FontAngle = 'italic');
 % spike multiplier label
-P.SpikeMultiplier = uilabel(grid1,def.Label, ...
+P.SpikeMultiplier = uilabel(grid2,def.Label, ...
     Text = 'Thresh. Multiplier',...
     HorizontalAlignment = 'left',...
     FontAngle = 'italic');
 % Standard deviation checkbox
-GUIControl.SpikeStddev = uicheckbox(grid1,def.Checkbox, ...
+GUIControl.SpikeStddev = uicheckbox(grid2,def.Checkbox, ...
     Text = 'Standard deviation');
 % Standard deviation threshold
-GUIControl.StddevThreshold = uieditfield(grid1,'numeric',def.Editfield, ...
+GUIControl.StddevThreshold = uieditfield(grid2,'numeric',def.Editfield, ...
     Value = 1,...
     ValueDisplayFormat = '%0.1f');
 % Skewness checkbox
-GUIControl.SpikeSkewness = uicheckbox(grid1,def.Checkbox, ...
+GUIControl.SpikeSkewness = uicheckbox(grid2,def.Checkbox, ...
     Text = 'One side skewness');
 % Skewness threshold
-GUIControl.SkewnessThreshold = uieditfield(grid1,'numeric',def.Editfield, ...
+GUIControl.SkewnessThreshold = uieditfield(grid2,'numeric',def.Editfield, ...
     Value = 1,...
     ValueDisplayFormat = '%0.1f');
 % Velocity Correlation checkbox
-GUIControl.SpikeVelCorr = uicheckbox(grid1,def.Checkbox, ...
+GUIControl.SpikeVelCorr = uicheckbox(grid2,def.Checkbox, ...
     Text = 'Velocity Correlation (Cea07)');
 % Velocity Correlation threshold
-GUIControl.VelCorrThreshold = uieditfield(grid1,'numeric',def.Editfield, ...
+GUIControl.VelCorrThreshold = uieditfield(grid2,'numeric',def.Editfield, ...
     Value = 1,...
     ValueDisplayFormat = '%0.1f');
 % Goring Nikora checkbox
-GUIControl.SpikeGoringNikora = uicheckbox(grid1,def.Checkbox, ...
+GUIControl.SpikeGoringNikora = uicheckbox(grid2,def.Checkbox, ...
     Text = 'Phase space thresh. (GN 02)');
 % Goring Nikora threshold
-GUIControl.GoringNikoraThreshold = uieditfield(grid1,'numeric',def.Editfield, ...
+GUIControl.GoringNikoraThreshold = uieditfield(grid2,'numeric',def.Editfield, ...
     Value = 1,...
     ValueDisplayFormat = '%0.1f');
 % Freeze good data, Parsheh
-GUIControl.Parsheh = uicheckbox(grid1,def.Checkbox, ...
+GUIControl.Parsheh = uicheckbox(grid2,def.Checkbox, ...
     Text = 'Freeze good data (Parsheh 10)');
     GUIControl.Parsheh.Layout.Column = 2;
-GUIControl.SpikeARMA = uicheckbox(grid1,def.Checkbox, ...
+GUIControl.SpikeARMA = uicheckbox(grid2,def.Checkbox, ...
     Text = 'ARMA (DM 15)');
 % Goring Nikora threshold
-P.ARMAopts = uibutton(grid1,def.Button, ...
+P.ARMAopts = uibutton(grid2,def.Button, ...
     Text = 'setARMAopts', ...
     Enable = 'off');
-P.SpikeReplace = uilabel(grid1,def.Label,...
+P.SpikeReplace = uilabel(grid2,def.Label,...
     Text = 'Replacement Method',...
     HorizontalAlignment = 'left',...
     FontAngle = 'italic');
-GUIControl.ReplacementMethod = uidropdown(grid1,def.Dropdown, ...
+GUIControl.ReplacementMethod = uidropdown(grid2,def.Dropdown, ...
     Items = {'linear interpolation','quadratic interpolation'});
 
 %%% Filter options panel
-P.FilterOptions = uipanel(grid,def.Panel, ...
+P.FilterOptions = uipanel(grid1,def.Panel, ...
     Title = 'Filter options',...
     FontAngle = 'italic');
-grid1 = uigridlayout(P.FilterOptions,[1,1],...
-    RowHeight = {btn.height}, ...
-    RowSpacing = 0, ...
-    ColumnSpacing = 0);
-GUIControl.FilterMethod = uidropdown(grid1,def.Dropdown,...
+grid2 = uigridlayout(P.FilterOptions,[1,1],def.Grid,...
+    RowHeight = {btn.height});
+GUIControl.FilterMethod = uidropdown(grid2,def.Dropdown,...
     Items = {'3rd order butterworth'});
 
 %%%% 3rd panel
 % ui panel listing all filter array options and parameters
 % grid
-grid = uigridlayout(pnl(3),[3,1],...
-    RowHeight = {'fit','fit','fit'});
+grid1 = uigridlayout(grid,[4,1],def.Grid,...
+    RowHeight = {'fit','1x','fit',btn.height});
 
 % sub-panel
-P.Classify = uipanel(grid,def.Panel, ...
+P.Classify = uipanel(grid1,def.Panel, ...
     Title = 'Classify block options');
 % sub-grid
-grid1 = uigridlayout(P.Classify,[4,3],...
-    RowHeight = repmat({btn.height},[4,1]), ...
-    RowSpacing = 0,...
-    ColumnSpacing = 0);
+grid2 = uigridlayout(P.Classify,[3,3],def.Grid,...
+    RowHeight = repmat({btn.height},[3,1]));
 % reset classification
-GUIControl.resetFilter = uicheckbox(grid1,def.Checkbox,...
+GUIControl.resetFilter = uicheckbox(grid2,def.Checkbox,...
     Text = 'Reset classifications w/ listed parameters');
     GUIControl.resetFilter.Layout.Column = [1,3];
-% use interactive plot or automatic analysis
-GUIControl.plotArray = uicheckbox(grid1,def.Checkbox,...
-    Text = 'Interactive QC GUI (unchecked = auto analysis)');
-    GUIControl.plotArray.Layout.Column = [1,3];
 % plot classification results in new window
-GUIControl.plotQCauto = uicheckbox(grid1,def.Checkbox,...
+GUIControl.plotQCauto = uicheckbox(grid2,def.Checkbox,...
     Text = 'Plot classification results in tables');
     GUIControl.plotQCauto.Layout.Column = [1,3];
 % set x and y variables for automatic analysis
-P.variables = uilabel(grid1,def.Label, ...
+P.variables = uilabel(grid2,def.Label, ...
     Text = 'Set default x and y variables',...
     HorizontalAlignment = 'left');
-GUIControl.nxvar = uidropdown(grid1,def.Dropdown, ...
+GUIControl.nxvar = uidropdown(grid2,def.Dropdown, ...
     Items = {'Vel','Despiked','Filtered'});
-GUIControl.Yvar = uidropdown(grid1,def.Dropdown, ...
+GUIControl.Yvar = uidropdown(grid2,def.Dropdown, ...
     Items = {'zZ'});
 
 % Spike options panel
-P.faQCOptions = uipanel(grid,def.Panel, ...
+P.faQCOptions = uipanel(grid1,def.Panel, ...
     Title = 'Classification parameters',...
     FontAngle = 'italic');
-grid1 = uigridlayout(P.faQCOptions,[7,3],...
-    RowHeight = repmat({btn.height},[7,1]),...
+grid2 = uigridlayout(P.faQCOptions,[8,3],...
+    RowHeight = repmat({btn.height},[8,1]),...
     ColumnWidth = {'fit','1x','1x'},...
-    RowSpacing = 1,...
-    ColumnSpacing = 1);
+    RowSpacing = 0,...
+    ColumnSpacing = 0,...
+    Padding = 5);
 % make faQC buttons
-faQC = makefaQCbuttons(grid1,def);
-        
+faQC = makefaQCbuttons(grid2,def);
+       
+% Visualization GUI's
+P.Visualize = uipanel(grid1,def.Panel,...
+    Title = 'Visualization GUIs',...
+    FontAngle = 'italic');
+grid2 = uigridlayout(P.Visualize,[2,2],def.Grid,...
+    RowHeight = {65,65}, ...
+    ColumnWidth = {'1x','1x'});
+% use interactive plot or automatic analysis
+GUIControl.plotArray = uicheckbox(grid2,def.Checkbox,...
+    Text = 'Interactive QC GUI');
+GUIControl.VisualizeData = uicheckbox(grid2,def.Checkbox,...
+    Text = 'Visualize data in GUI');
+    GUIControl.VisualizeData.Layout.Row = 2;
+    GUIControl.VisualizeData.Layout.Column = 1;
+% Create ButtonGroup
+bg = uibuttongroup(grid2,...
+    Title = 'Visualize Data GUI');
+    bg.Layout.Row = [1,2];
+    bg.Layout.Column = 2;
+% spectrum GUI
+GUIControl.plotSpectrum = uitogglebutton(bg,def.Button, ...
+    Position = [10 10 125 25],...
+    Text='Create spectrum GUI');
+% time space GUI
+GUIControl.plotTimeSpace = uitogglebutton(bg,def.Button, ...
+    Position = [10 40 125 25],...
+    Text='Create time space GUI');
+% time series GUI
+GUIControl.plotTimeSeries = uitogglebutton(bg,def.Button, ...
+    Text='Create time series GUI',...
+    Position = [10 70 125 25],...
+    Value = true);
+
 % file selection 'Done' pushbutton
-P.run = uibutton(grid,def.Button,...
+P.run = uibutton(grid1,def.Button,...
     Text = 'Run Analysis');
 
+f.UserData.Grid = grid;
+f.UserData.P = P;
+f.UserData.hGUIControl = GUIControl;
+f.UserData.faQC = faQC;
 end
 
+% initializes all the uipanels to their initial visibility
+function f = InitializeUI(f)
+hGUIControl = f.UserData.hGUIControl;
+P = f.UserData.P;
+    P.Select.Visible = 'off';
+    % organize panel
+    hGUIControl.ChannelType.Visible = 'off';
+    P.SamplingLocations.Visible = 'off';
+    P.Uniform.Visible = 'off';
+    P.NonUniform.Visible = 'off';
+    P.Combine.Visible = 'off';
+    P.Organize.Visible = 'off';
+    % clean panel
+    P.SpikeOptions.Visible = 'off';
+    P.FilterOptions.Visible = 'off';
+    P.Clean.Visible = 'off';
+    % classify panel(s)
+    P.Classify.Visible = 'off';
+    P.faQCOptions.Visible = 'off';
+    bg = hGUIControl.plotTimeSeries.Parent;
+    bg.Visible = 'off';
+    P.Visualize.Visible = 'off';
+    P.run.Enable = 'off';
+f.UserData.hGUIControl = hGUIControl;
+f.UserData.P = P;
+end
+
+% set callback functions for the various uicontrols
+function f = SetCallbackFunctions(f)
+P = f.UserData.P;
+hGUIControl = f.UserData.hGUIControl;
+    % set the CSVcontrol file names
+    set(P.getfile,'ButtonPushedFcn',@hgetfileCallback);
+    % Computational block control callbacks
+    set(hGUIControl.Organize,'ValueChangedFcn',@hOrganizeCallback);
+    set(hGUIControl.Clean,'ValueChangedFcn',@hCleanCallback);
+    set(hGUIControl.Classify,'ValueChangedFcn',@hClassifyCallback);
+    % Organization block callbacks
+    set(hGUIControl.EditCSV,'ButtonPushedFcn',@hEditCSVCallback);
+    set(hGUIControl.CombineFiles,'ValueChangedFcn',@hCombineFilesCallback);
+    set(P.FileCombine,'ButtonPushedFcn',@hFileCombineCallback);
+    set(hGUIControl.DefineGeometry,'ValueChangedFcn',@hDefineGeometryCallback);
+    set(hGUIControl.Sampling,'ValueChangedFcn',@hSamplingCallback);
+    set(hGUIControl.getCalcChannelfile,'ButtonPushedFcn',@hgetCalcChannelfileCallback);
+    set(hGUIControl.ChannelType,'ValueChangedFcn',@hChannelTypeCallback); 
+    set(hGUIControl.ChannelPreset,'ValueChangedFcn',@hChannelPresetCallback);
+    set(hGUIControl.Length,'ValueChangedFcn',@hLengthCallback);
+    set(hGUIControl.Width,'ValueChangedFcn',@hWidthCallback);
+    set(hGUIControl.Depth,'ValueChangedFcn',@hDepthCallback);
+    set(hGUIControl.getCalcXYZfile,'ButtonPushedFcn',@hgetCalcXYZfileCallback);
+    % Clean block callbacks
+    set(hGUIControl.Despike,'ValueChangedFcn',@hDespikeCallback);
+    set(hGUIControl.Preprocess,'ValueChangedFcn',@hPreprocessCallback);
+    set(hGUIControl.SpikeARMA,'ValueChangedFcn',@hSpikeARMACallback);
+    set(P.ARMAopts,'ButtonPushedFcn',@hARMAoptsCallback);
+    set(hGUIControl.FiltrBW,'ValueChangedFcn',@hFiltrBWCallback);
+    % Classify block callbacks
+    hGUIControl.VisualizeData.ValueChangedFcn = @hVisualizeDataCallback;
+    % Run button callback
+    set(P.run,'ButtonPushedFcn',@hrunCallback);
+f.UserData.P = P;
+f.UserData.hGUIControl = hGUIControl;
+end

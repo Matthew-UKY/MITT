@@ -5,33 +5,18 @@ function [Data,Config] = OrganizeVectrinoIIData(GUIControl,CSVControl)
 
 %% get Config and Data
 % get filenames
-inname = [GUIControl.CSVControlpathname,CSVControl.filename,'.mat'];
+inname = strcat(GUIControl.CSVControlpathname,filesep,CSVControl.filename{1});
 % get Config data from subprogram
-Config = CalcConfigVectrinoII(CSVControl,inname);
+Config = CalcConfigVectrinoII(inname);
 % save component names in Config
 Config.comp = {'u';'v';'w1';'w2'};
-% get all fields in CSVControl and put them in Config
-fnames = fieldnames(CSVControl);
-nftot = length(fnames);
+% get all variables from CSVControl and put them in Config
+vnames = CSVControl.Properties.VariableNames;
+nftot = length(vnames);
 for nf = 1:nftot
-    Config.(fnames{nf}) = CSVControl.(fnames{nf});
+    Config.(vnames{nf}) = CSVControl.(vnames{nf});
 end
 
-% if a sampling locations algorithm was specified
-if GUIControl.Sampling
-    % get position data using CalcXYZfile
-    CalcXYZfile = str2func(GUIControl.CalcXYZfile(1:end-2)); % rmv .m
-    Config = CalcXYZfile(Config);
-end
-
-% calculate derived position data
-Config.zZ = Config.zpos/Config.waterDepth;
-Config.waterElevation = Config.bedElevation+Config.waterDepth; %
-Config.zposGlobal = Config.bedElevation+Config.zpos;
-
-if isfield(Config,'Y')
-    Config.yY = Config.ypos/Config.Y;
-end
 % calculate sampling volume (estimated - difficult to actually calculate
 % according to Nortek
 % assume a cylindrical volume the same diameter as ADV
@@ -42,10 +27,25 @@ Config.samplingVolume = pi()*Config.cellRadius^2*Config.cellWidth;
 Data = GetDataVectrinoII(Config,inname);
 % save additional parameters to Config
 Config.ntimetot = length(Data.timeStamp);
+% if a sampling locations algorithm was specified
+if GUIControl.Sampling
+    % get position data using CalcXYZfile
+    CalcXYZfile = str2func(GUIControl.CalcXYZfile(1:end-2)); % rmv .m
+    Config = CalcXYZfile(Config,Data);
+end
+
+% calculate derived position data
+Config.zZ = Config.zpos/Config.waterDepth;
+Config.waterElevation = Config.bedElevation+Config.waterDepth;
+Config.zposGlobal = Config.bedElevation+Config.zpos;
+
+if isfield(Config,'Y')
+    Config.yY = Config.ypos/Config.Y;
+end
 
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function Config = CalcConfigVectrinoII(CSVControl,inname)
+function Config = CalcConfigVectrinoII(inname)
 
 Raw = load(inname,'Config');
 
@@ -58,8 +58,8 @@ Config.Hz = Raw.Config.sampleRate;
 Config.cellWidth = Raw.Config.cellSize/10000;
 Config.cellInterval = Config.cellWidth; %same as cellWidth
 Config.nCells = Raw.Config.nCells;
-% calculate distance to center of 1st cell (add cellWidth/2)
-Config.cellStart = Raw.Config.cellStart/10000+Config.cellWidth/2;
+% CellStart is at the centroid of the first cell
+Config.cellStart = Raw.Config.cellStart/10000;
 Config.velocityRange = Raw.Config.velocityRange/1000;
 Config.horizontalVelocityRange = Raw.Config.horizontalVelocityRange/1000;
 Config.verticalVelocityRange = Raw.Config.verticalVelocityRange/1000;
@@ -73,13 +73,12 @@ Config.bottom_cellSize = Raw.Config.bottom_cellSize/10000;
 Config.MainBoard_acSerialNo = Raw.Config.MainBoard_acSerialNo;
 Config.MainBoard_Hz = Raw.Config.MainBoard_hFrequency*1000;
 Config.MainBoard_hPICversion = Raw.Config.MainBoard_hPICversion;
-Config.MainBoard_hHWrevision = Raw.Config.MainBoard_hHWrevision;
 Config.MainBoard_hRecSize = Raw.Config.MainBoard_hRecSize;
 Config.MainBoard_cFWversion = Raw.Config.MainBoard_cFWversion;
-%Config.MainBoard_cFWRepoVersion = Raw.Config.MainBoard_cFWRepoVersion;
+Config.MainBoard_cFWRepoVersion = Raw.Config.MainBoard_cFWRepoVersion;
 Config.MainBoard_cFWdate = Raw.Config.MainBoard_cFWdate;
 Config.Probe_acSerialNo = Raw.Config.Probe_acSerialNo;
-%Config.transformationMatrix = Raw.Config.ProbeCalibration_calibrationMatrix;
+Config.beam2XYZMatrix = Raw.Config.ProbeCalibration_calibrationMatrix;
 Config.originalfileName = Raw.Config.fileName;
 Config.startCollectionTime_seconds = Raw.Config.startCollectionTime_seconds;
 Config.startCollectionTime_subseconds = Raw.Config.startCollectionTime_subseconds;
@@ -104,12 +103,15 @@ if Config.coordSystem == 1
 elseif Config.coordSystem == 2
     ntimetot = length(Raw.Data.Profiles_TimeStamp); % added 14/09/12
     nCells=length(Raw.Data.Profiles_Range); % added 14/09/12 
-    Beam = zeros(ntimetot,Config.nCells,4);
-    Ortho = zeros(ntimetot,4,Config.nCells);
-    for ncomp = 1:4
-        eval(['Beam(:,:,ncomp) = Raw.Data.Profiles_VelBeam',num2str(ncomp),';']);  % edited 14/09/12 
+    Beam = zeros(ntimetot,nCells,4);
+    Ortho = zeros(ntimetot,4,nCells);
+
+    Beams = {'Beam1','Beam2','Beam3','Beam4'};
+    beamVel = strcat("Profiles_Vel",Beams);
+    for b = 1:4
+        Beam(:,:,b) = Raw.Data.(beamVel(b)); 
     end
-    Beam = permute(Beam,[1 3 2]);
+    Beam = permute(Beam,[1 3 2 4]);
     for nC = 1:nCells
         % switch to beam
         TransMi = reshape(Config.transformationMatrix(nC,:),4,4)';
@@ -121,21 +123,105 @@ elseif Config.coordSystem == 2
     Data.Vel.v = Ortho(:,:,2);
     Data.Vel.w1 = Ortho(:,:,3);
     Data.Vel.w2 = Ortho(:,:,4);
-
 end
 
 % get additional detail from files
-deets = {'Cor','Amp','SNR','DataQuality'};
+deets = {'Cor';'Amp';'SNR';'DataQuality'};
+Beams = {'Beam1','Beam2','Beam3','Beam4'};
 ndtot = length(deets);
+nbtot = length(Beams);
 
-for ncomp = 1:length(Config.comp)
-    for nd=1:ndtot
-        eval(['Data.',deets{nd},'.Beam',num2str(ncomp),' = Raw.Data.Profiles_',deets{nd},'Beam',num2str(ncomp),';']);
+rawDeets = strcat("Profiles_",deets);
+rawDeets = repmat(rawDeets,[1,nbtot]);
+rawDeets = strcat(rawDeets,repmat(Beams,[ndtot,1]));
+
+for d=1:ndtot
+    for b = 1:nbtot
+        Data.(deets{d}).(Beams{b}) = Raw.Data.(rawDeets{d,b});
     end
 end
 
 Data.timeStamp = Raw.Data.Profiles_TimeStamp;
+Data.cellDist = Raw.Data.VelocityHeader_Range;
 
+% If Orientation is specified, just permute the velocities to avoid
+% slowdowns due to unnecessary matrix multiplication. Otherwise, use the
+% specified transformation matrix.
+if isfield(Config,'Orientation')
+    Data = OrientVectrinoIIVelocities(Data,Config);
+end
+end
+
+function Data = OrientVectrinoIIVelocities(Data,Config)
+Orientation = Config.Orientation;
+switch Orientation
+    case 0 % Orientation of 0 means use the transformation matrix.
+        if isfield(Config,'transMatrix')
+            Data = TransformVectrinoIIVelocities(Data, Config);
+        else
+            msgbox("Transformation matrix not specified for file: " + Config.filename)
+        end
+    % The following orientations are in reference to the xyz coordinates
+    % defined for MITT. For instance, a +90x rotation is a 90-degree rotation
+    % Counter-Clockwise about the x-axis. Rotations are assumed to occur from
+    % the default orientation, down-looking facing downstream.
+    case 1 % 0 (default orientation, do nothing)
+    case 2 % +180z
+        Data.Vel.u = -1 * Data.Vel.u;
+        Data.Vel.v = -1 * Data.Vel.v;
+    case 3 % -90x, 180y
+        tData = Data;
+        Data.Vel.u = -1 * tData.Vel.u;
+        Data.Vel.v = (tData.Vel.w1 + tData.Vel.w2)/2;
+        Data.Vel.w1 = tData.Vel.v;
+        Data.Vel.w2 = tData.Vel.v;
+    case 4 % -90x
+        tData = Data;
+        Data.Vel.u = tData.Vel.u;
+        Data.Vel.v = (tData.Vel.w1 + tData.Vel.w2)/2;
+        Data.Vel.w1 = -1 * tData.Vel.v;
+        Data.Vel.w2 = -1 * tData.Vel.v;
+    case 5 % +90x, 180y
+        tData = Data;
+        Data.Vel.u = -1 * tData.Vel.u;
+        Data.Vel.v = -1 * (tData.Vel.w1 + tData.Vel.w2)/2;
+        Data.Vel.w1 = -1 * tData.Vel.v;
+        Data.Vel.w2 = -1 * tData.Vel.v;
+    case 6 % +90x
+        tData = Data;
+        Data.Vel.u = tData.Vel.u;
+        Data.Vel.v = -1 * (tData.Vel.w1 + tData.Vel.w2)/2;
+        Data.Vel.w1 = tData.Vel.v;
+        Data.Vel.w2 = tData.Vel.v;
+end
+end
+
+% Transform the data using the user-input transformation matrix.
+function Data = TransformVectrinoIIVelocities(Data, Config)
+transMatrix = str2num(Config.transMatrix);
+if size(transMatrix) == [3, 3]
+    vel = ConvStruct2Multi(Data.Vel,["u";"v";"w1";"w2"]);
+    [nttot,nCells,ncomptot] = size(vel);
+
+    % transform the data
+    for nt = 1:nttot
+       for nc = 1:nCells
+          uvw1 = vel(nt,nc,[1,2,3]);
+          uvw2 = vel(nt,nc,[1,2,4]);
+          % prepare for multiplication
+          uvw1 = permute(uvw1,[3,2,1]);
+          uvw1 = transMatrix*uvw1;  % transform velocity vector
+          uvw2 = permute(uvw2,[3,2,1]);
+          uvw2 = transMatrix*uvw2;  % transform velocity vector
+          vel(nt,nc,[1,2]) = (uvw1(1:2) + uvw2(1:2)) / 2;
+          vel(nt,nc,3) = uvw1(3);
+          vel(nt,nc,4) = uvw2(3);
+       end
+     end
+     Data = ConvMulti2Struct(vel,Data,["u";"v";"w1";"w2"],'Vel');
+else
+    msgbox("Transformation matrix input error for file: " + Config.filename)
+end
 end
 
 
