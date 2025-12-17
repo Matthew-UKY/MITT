@@ -6,7 +6,7 @@ clc
 % Calls OrganizeInput, CleanSeries, ClassifyArrayGUI, ClassifyArrayAuto 
 
 % default directory for stored data
-dataPath = 'C:\Users\mattl\Documents\College\Water Resources Research\Turbulence Research\2 Data Repository';
+dataPath = 'C:\Users\mtlyp\University of Kentucky\Hydrosystems Lab - Velocimeter Project - 2 Data Repository\24''-25'' - Cave Data\Updated Procedure Data';
 
 %% Create figure/uicontrols
 % create launch GUI figure

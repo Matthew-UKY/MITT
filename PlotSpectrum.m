@@ -717,6 +717,7 @@ sm.pointMethod;
 sm.nPoints = plt.SmoothPointEditbox.Value;
 sm.widthMethod;
 sm.percentWidth = plt.SmoothWidthEditbox.Value;
+Config.Smooth = sm;
 end
 % xdata and ydata are found at the borders of the view window defined by
 % xlims and ylims
