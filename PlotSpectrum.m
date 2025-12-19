@@ -1,10 +1,3 @@
-%% Known bugs
-% translate is different between the loglog and semilog plots, need to fix
-% this discrepency
-
-%
-%%
-
 function PlotSpectrum(AllStruct,init)
 %
 % debug
@@ -67,9 +60,9 @@ plt = f.UserData;
     plt.SignalPanel.Layout.Column = 3;
     plt.SignalPanel.Layout.Row = 1;
     
-    bh = 25; % button height
+    bh = 22; % button height
     grid = uigridlayout(plt.SignalPanel);
-    grid.RowHeight = {'fit','fit',bh,'fit',bh,'fit'};
+    grid.RowHeight = {'fit','fit',bh,'fit',bh,'fit',96};
     grid.ColumnWidth = {'1x'};
     grid.Padding = 0;
     grid.RowSpacing = 0;
@@ -215,6 +208,13 @@ plt = f.UserData;
     plt.SmoothPointSlider.Layout.Row = 4;
     plt.SmoothPointSlider.Layout.Column = [1,2];
 
+% switch independent variable controls
+    plt.SwitchVarButtonGroup = uibuttongroup(grid);
+
+    for i = 1:3
+        plt.SwitchVarButton(i) = uiradiobutton(plt.SwitchVarButtonGroup);
+        plt.SwitchVarButton(i).Position = [10 60-25*(i-1) 91 22];
+    end
 
 f.UserData = plt;
 end
@@ -247,6 +247,9 @@ plt = f.UserData;
     plt.SlopeEditbox.ValueChangedFcn = @SlopeEditboxValueChanged;
     plt.SlopeSlider.ValueChangingFcn = @SlopeSliderValueChanging;
     plt.TranslateSlider.ValueChangingFcn = @TranslateSliderValueChanging;
+% switch independent variable callbacks
+    plt.SwitchVarButtonGroup.SelectionChangedFcn = @SwitchVarSelectionChanged;
+
 % data callbacks
     plt.FilenameListbox.ValueChangedFcn = @FilenameValueChanged;
     plt.VelButton.ValueChangedFcn = @UpdateVisibility;
@@ -400,6 +403,10 @@ Config = plt.AllStruct(1).Config;
     plt.TranslateSlider.MajorTicks = [];
     plt.TranslateSlider.MinorTicks = [];
     plt.TranslateSlider.Value = defaultTranslate;
+% initialize independent variable switch
+    plt.SwitchVarButton(1).Text = 'Frequency';
+    plt.SwitchVarButton(2).Text = 'Wavenumber';
+    plt.SwitchVarButton(3).Text = 'Wavelength';
 
 % initialize data display controls
     signalInfo = GetSignalInfo(Config);
@@ -415,10 +422,6 @@ Config = plt.AllStruct(1).Config;
     end
     plt.CellSpinner.Limits = [init.CellMin,init.CellMax];
     plt.CellSpinner.Value = init.CellValue;
-% initialize x limits
-    ax = plt.ax;
-    set([ax.Psd],'XLim',[10^-2,Config.Hz])
-    set([ax.Pre],'XLim',[10^-2,Config.Hz])
 
 f.UserData = plt;
 end
@@ -505,35 +508,61 @@ Config = GetInputs(plt,Config);
     window = CreateWindow(Config.Spectrum);
     noverlap = CreateNoverlap(Config.Spectrum);
 
-    oldPxxLength = length(SpectrumLines.Psd(1,1).XData);
+    varbg = f.UserData.SwitchVarButtonGroup;
+    varbuttons = varbg.Buttons;
+    yVar = [varbuttons.Value];
+    yVar = yVar(:); % ensure col vector
+
+    oldLength = length(SpectrumLines.Psd(1,1).XData);
+% calculations and plotting
     for i = 1:nComp
         for j = 1:nAnalysis
+            convectionVelocity = mean(Data.(Anames{j}).u(:,ncell));
             % use POD/pwelch to create a denoised spectrum of the data
             signal = Data.(Anames{j}).(comp{i})(:,ncell);
             signal = PodDenoiseSignal(signal,Config.Spectrum);
-            [pxx,freq] = pwelch(signal,window,noverlap,[],fs);
-            premult = freq .* pxx;
-            smoothPxx = SmoothSignal(pxx,freq,Config.Smooth);
-            smoothPremult = freq .* smoothPxx;
-            newPxxLength = length(pxx);
-            if newPxxLength ~= oldPxxLength
+            [psd,freq] = pwelch(signal,window,noverlap,[],fs);
+            power = freq .* psd;
+            powerAxes = [ax.Pre];
+            indvarLabels = [powerAxes.XLabel];
+            if yVar(1) % frequency
+                indvar = freq;
+                label = 'Frequency (Hz)';
+            elseif yVar(2) % wavenumber
+                indvar = 2*pi*freq/convectionVelocity;
+                label = 'Wavenumber (1/m)';
+            elseif yVar(3) % wavelength
+                indvar = convectionVelocity./freq;
+                label = 'Wavelength (m)';
+            end
+            set(indvarLabels,'String',label)
+            psd = power./indvar;
+            % sort independent variable so it's in ascending order
+            [indvar,sortIndx] = sort(indvar);
+            psd = psd(sortIndx);
+            power = power(sortIndx);
+            % pre-multiplied and smoothing calcs
+            smoothPsd = SmoothSignal(psd,indvar,Config.Smooth);
+            smoothPower = indvar .* smoothPsd;
+            newLength = length(psd);
+            if newLength ~= oldLength
                 delete(SpectrumLines.Psd(i,j))
                 delete(SpectrumLines.Pre(i,j))
                 delete(SmoothLines.Psd(i,j))
                 delete(SmoothLines.Pre(i,j))
-                SpectrumLines.Psd(i,j) = plot(ax(i).Psd,freq,pxx,Color=Acolor(j,:));
-                SpectrumLines.Pre(i,j) = plot(ax(i).Pre,freq,premult,Color=Acolor(j,:));
-                SmoothLines.Psd(i,j) = plot(ax(i).Psd,freq,smoothPxx,Color=smoothColor(j,:));
-                SmoothLines.Pre(i,j) = plot(ax(i).Pre,freq,smoothPremult,Color=smoothColor(j,:));
+                SpectrumLines.Psd(i,j) = plot(ax(i).Psd,indvar,psd,Color=Acolor(j,:));
+                SpectrumLines.Pre(i,j) = plot(ax(i).Pre,indvar,power,Color=Acolor(j,:));
+                SmoothLines.Psd(i,j) = plot(ax(i).Psd,indvar,smoothPsd,Color=smoothColor(j,:));
+                SmoothLines.Pre(i,j) = plot(ax(i).Pre,indvar,smoothPower,Color=smoothColor(j,:));
             else
-                SpectrumLines.Psd(i,j).XData = freq;
-                SpectrumLines.Psd(i,j).YData = pxx;
-                SpectrumLines.Pre(i,j).XData = freq;
-                SpectrumLines.Pre(i,j).YData = premult;
-                SmoothLines.Psd(i,j).XData = freq;
-                SmoothLines.Psd(i,j).YData = smoothPxx;
-                SmoothLines.Pre(i,j).XData = freq;
-                SmoothLines.Pre(i,j).YData = smoothPremult;
+                SpectrumLines.Psd(i,j).XData = indvar;
+                SpectrumLines.Psd(i,j).YData = psd;
+                SpectrumLines.Pre(i,j).XData = indvar;
+                SpectrumLines.Pre(i,j).YData = power;
+                SmoothLines.Psd(i,j).XData = indvar;
+                SmoothLines.Psd(i,j).YData = smoothPsd;
+                SmoothLines.Pre(i,j).XData = indvar;
+                SmoothLines.Pre(i,j).YData = smoothPower;
             end
         end
     end
@@ -682,6 +711,10 @@ ydataSmooth(~yBad) = temp;
 end
 % find limits of data, where limits are the closest round #'s to extremes
 function [lower,upper] = CreateLimits(dat)
+    % pre-processing for log axes
+    logiKeep = ~isinf(dat) & ~isnan(dat) & dat > 0;
+    dat = dat(logiKeep);
+
 lower = min(dat);
 lowerSign = sign(lower);
 lower = abs(lower);
@@ -893,7 +926,11 @@ function SmoothPointSliderValueChanged(src,event)
     f.UserData.SmoothPointEditbox.Value = event.Value;
     UpdateSpectrumLines(f)
 end
-
+% Selection changed function: SwitchVarButtonGroup
+function SwitchVarSelectionChanged(src,event)
+    f = ancestor(src,'figure','toplevel');
+    UpdateSpectrumLines(f)
+end
 
 % Value changed function: FilenameListbox
 function FilenameValueChanged(src,event)
@@ -968,26 +1005,38 @@ graphType = {'Psd','Pre'};
                 set(SmoothLines.(graphType{g})(:,b),'Visible','off')
             end
         end
-        % create and set y-limits, where the components are linked
+        % create and set x- and y-limits, where the components are linked
         Lines = SpectrumLines.(graphType{g});
         [nComp,nAnalysis] = size(Lines);
-        lower = zeros(size(Lines));
+        dataType = ["XData","YData"];
+        nType = length(dataType);
+        lower = zeros(nComp,nAnalysis,nType);
         upper = lower; % initialize upper and lower limits
         for i = 1:nComp
             for j = 1:nAnalysis
-                [lower(i,j),upper(i,j)] = CreateLimits(Lines(i,j).YData);
+                for k = 1:2
+                    [lower(i,j,k),upper(i,j,k)] = CreateLimits(Lines(i,j).(dataType(k)));
+                end
             end
         end
-        % take min/max across all components
+        % take min/max across comp dimension
         lower = min(lower);
+        lower = permute(lower,[2,3,1]); % rmv singleton
         upper = max(upper);
+        upper = permute(upper,[2,3,1]); % rmv singleton
         % get rid of the analyses that aren't shown
-        lower = lower(logi);
-        upper = upper(logi);
+        lower = lower(logi,:);
+        upper = upper(logi,:);
         % find absolute min/max over the analyses that are shown
-        ylims(1) = min(lower);
-        ylims(2) = max(upper); 
+        lower = min(lower,[],1);
+        upper = max(upper,[],1); 
+        % create xlims and ylims
+        xlims(1) = lower(1);
+        xlims(2) = upper(1);
+        ylims(1) = lower(2);
+        ylims(2) = upper(2);
         % set limits onto the lines
+        ax(1).(graphType{g}).XLim = xlims;
         ax(1).(graphType{g}).YLim = ylims;
 
         % update reference line visibility
