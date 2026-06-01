@@ -517,7 +517,7 @@ Config = GetInputs(plt,Config);
 % calculations and plotting
     for i = 1:nComp
         for j = 1:nAnalysis
-            convectionVelocity = mean(Data.(Anames{j}).u(:,ncell));
+            convectionVelocity = abs(mean(Data.(Anames{j}).u(:,ncell)));
             % use POD/pwelch to create a denoised spectrum of the data
             signal = Data.(Anames{j}).(comp{i})(:,ncell);
             signal = PodDenoiseSignal(signal,Config.Spectrum);
@@ -581,7 +581,8 @@ end
 function UpdateReferenceLines(f)
 plt = f.UserData;
 ax = plt.ax;
-Config = plt.AllStruct(1).Config;
+nfile = plt.FilenameListbox.ValueIndex;
+Config = plt.AllStruct(nfile).Config;
 ReferenceLines = plt.ReferenceLines;
 slope = Config.Reflines.slope;
 translate = Config.Reflines.translate;

@@ -6,7 +6,7 @@ clc
 % Calls OrganizeInput, CleanSeries, ClassifyArrayGUI, ClassifyArrayAuto 
 
 % default directory for stored data
-dataPath = 'C:\Users\mtly228\Documents\MATLAB\2 - RAW & QAQC';
+dataPath = 'C:\Users\mtly228\University of Kentucky\Hydrosystems Lab - Velocimeter Project - General\12 Data Repository\RAW DATA';
 
 %% Create figure/uicontrols
 % create launch GUI figure
@@ -299,7 +299,7 @@ CSVControlpathname = hGUIControl.CSVControlpathname.Text;
             P.message.Value{end+1} = 'Saving combined file...';
             scroll(P.message,'bottom')
             pause(1) % allow message to pop up
-            save([CSVControlpathname,filesep,combinedFilename],'Config','Data')
+            save([CSVControlpathname,filesep,combinedFilename],'Config','Data','-v7.3')
             P.message.Value{end+1} = 'Done';
             scroll(P.message,'bottom')
 
