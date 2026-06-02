@@ -1,31 +1,28 @@
 function PlotSpectrum(AllStruct,init)
-%
-% debug
-%{
-Config = struct();
-Config.ntimetot = 180000;
-Config.Hz = 100;
-Config.comp = {'u','v','w1','w2'};
-Config.startCollectionTime_seconds = 1760907575;
-Config.startCollectionTime_subseconds = 0.5;
-Config.timeZoneOffset = -14400;
-AllStruct = struct();
-AllStruct.Config = Config;
+% % debug
+% Config = struct();
+% Config.ntimetot = 180000;
+% Config.Hz = 100;
+% Config.comp = {'u','v','w1','w2'};
+% Config.startCollectionTime_seconds = 1760907575;
+% Config.startCollectionTime_subseconds = 0.5;
+% Config.timeZoneOffset = -14400;
+% AllStruct = struct();
+% AllStruct.Config = Config;
+% 
+% Acolor = [0,0,1;
+%           0,1,0;
+%           1,0,0]; % blue, green, red
+% init = struct();
+% init.FileItems = {'File 1','File 2','File 3','File 4'};
+% init.FileValue = {'File 1'};
+% init.AnalysisValue = [true,false,false];
+% init.AnalysisVisible = [true,true,true];
+% init.AnalysisColors = Acolor;
+% init.CellValue = 1;
+% init.CellMin = 1;
+% init.CellMax = 35;
 
-Acolor = [0,0,1;
-          0,1,0;
-          1,0,0]; % blue, green, red
-init = struct();
-init.FileItems = {'File 1','File 2','File 3','File 4'};
-init.FileValue = {'File 1'};
-init.AnalysisValue = [true,false,false];
-init.AnalysisVisible = [true,true,true];
-init.AnalysisColors = Acolor;
-init.CellValue = 1;
-init.CellMin = 1;
-init.CellMax = 35;
-
-%}
 % create the default figure w/ control panel
 f = VisualizeUIFigure;
 f.UserData.init = init;
@@ -44,7 +41,7 @@ f = PlotSpectrumAxes(f);
 f = InitializeUI(f);
 
 % create and update the line objects for each plot
-CreateLines(f)
+f = CreateLines(f);
 UpdateSpectrumLines(f)
 
 f.Name = 'Plot spectrum GUI';
@@ -52,7 +49,7 @@ f.Visible = 'on';
 end
 
 %% ui creation functions
-% create controls for plottimeseries
+% create controls for plot spectrum
 function f = PlotSpectrumControls(f)
 plt = f.UserData;
 
@@ -252,9 +249,9 @@ plt = f.UserData;
 
 % data callbacks
     plt.FilenameListbox.ValueChangedFcn = @FilenameValueChanged;
-    plt.VelButton.ValueChangedFcn = @UpdateVisibility;
-    plt.DespikedButton.ValueChangedFcn = @UpdateVisibility;
-    plt.FilteredButton.ValueChangedFcn = @UpdateVisibility;
+    plt.VelButton.ValueChangedFcn = @VelButtonValueChanged;
+    plt.DespikedButton.ValueChangedFcn = @DespikedButtonValueChanged;
+    plt.FilteredButton.ValueChangedFcn = @FilteredButtonValueChanged;
     plt.CellSpinner.ValueChangedFcn = @CellSpinnerValueChanged;
 
 f.UserData = plt;
@@ -426,7 +423,7 @@ Config = plt.AllStruct(1).Config;
 f.UserData = plt;
 end
 % create empty containers for each of the lines in each plot
-function CreateLines(f)
+function f = CreateLines(f)
 plt = f.UserData;
 ax = plt.ax;
 Config = plt.AllStruct(1).Config;
@@ -978,8 +975,44 @@ Config = AllStruct(nfile).Config;
 f.UserData = plt;
 UpdateSpectrumLines(f)
 end
+% Value changed function: VelButton
+function VelButtonValueChanged(src,event)
+f = ancestor(src,'figure','toplevel');
+plt = f.UserData;
+btn = [plt.VelButton,plt.DespikedButton,plt.FilteredButton];
+logi = [btn.Value];
+if ~any(logi)
+    plt.VelButton.Value = true;
+else
+    UpdateVisibility(src,event)
+end
+end
+% Value changed function: DespikedButton
+function DespikedButtonValueChanged(src,event)
+f = ancestor(src,'figure','toplevel');
+plt = f.UserData;
+btn = [plt.VelButton,plt.DespikedButton,plt.FilteredButton];
+logi = [btn.Value];
+if ~any(logi)
+    plt.DespikedButton.Value = true;
+else
+    UpdateVisibility(src,event)
+end
+end
+% Value changed function: FilteredButton
+function FilteredButtonValueChanged(src,event)
+f = ancestor(src,'figure','toplevel');
+plt = f.UserData;
+btn = [plt.VelButton,plt.DespikedButton,plt.FilteredButton];
+logi = [btn.Value];
+if ~any(logi)
+    plt.VelButton.Value = true;
+else
+    UpdateVisibility(src,event)
+end
+end
 % update velocity button type visibility and y limits
-function UpdateVisibility(src,~)
+function UpdateVisibility(src,event)
 f = ancestor(src,'figure','toplevel');
 plt = f.UserData;
 ax = plt.ax;

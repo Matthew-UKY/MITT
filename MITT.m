@@ -5,13 +5,16 @@ clc
 % Called from command line
 % Calls OrganizeInput, CleanSeries, ClassifyArrayGUI, ClassifyArrayAuto 
 
-% default directory for stored data
-dataPath = 'C:\Users\mtly228\University of Kentucky\Hydrosystems Lab - Velocimeter Project - General\12 Data Repository\RAW DATA';
+% put default directory for stored data here
+workingFolder = pwd;
+pat = 'University of Kentucky';
+teams_root = extractBefore(workingFolder,pat);
+data_path = fullfile(teams_root,pat,'Hydrosystems Lab - Velocimeter Project - General\12 Data Repository');
 
 %% Create figure/uicontrols
 % create launch GUI figure
 f = CreateUIFigure;
-f.UserData.dataPath = dataPath;
+f.UserData.dataPath = data_path;
 
 % create uicontrol buttons in f
 f = MakeUIControls(f);
