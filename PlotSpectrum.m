@@ -289,8 +289,6 @@ nComp = length(comp);
             ylabel(ax(i).Pre,'Energy (m^2/s^2)')
         end
     end
-linkaxes([ax.Psd])
-linkaxes([ax.Pre])
 plt.ax = ax;
 f.UserData = plt;
 end
@@ -487,7 +485,7 @@ Data = plt.AllStruct(nfile).Data;
 Config = plt.AllStruct(nfile).Config;
 SpectrumLines = plt.SpectrumLines;
 SmoothLines = plt.SmoothLines;
-Config = GetInputs(plt,Config);
+Config = GetInputs(plt,Config,Config);
 
 % config variables
     comp = Config.comp;
@@ -547,10 +545,10 @@ Config = GetInputs(plt,Config);
                 delete(SpectrumLines.Pre(i,j))
                 delete(SmoothLines.Psd(i,j))
                 delete(SmoothLines.Pre(i,j))
-                SpectrumLines.Psd(i,j) = plot(ax(i).Psd,indvar,psd,Color=Acolor(j,:));
-                SpectrumLines.Pre(i,j) = plot(ax(i).Pre,indvar,power,Color=Acolor(j,:));
-                SmoothLines.Psd(i,j) = plot(ax(i).Psd,indvar,smoothPsd,Color=smoothColor(j,:));
-                SmoothLines.Pre(i,j) = plot(ax(i).Pre,indvar,smoothPower,Color=smoothColor(j,:));
+                SpectrumLines.Psd(i,j) = plot(ax(i).Psd,indvar,psd,Color=Acolor(j,:),LineWidth=1);
+                SpectrumLines.Pre(i,j) = plot(ax(i).Pre,indvar,power,Color=Acolor(j,:),LineWidth=1);
+                SmoothLines.Psd(i,j) = plot(ax(i).Psd,indvar,smoothPsd,Color=smoothColor(j,:),LineWidth=2);
+                SmoothLines.Pre(i,j) = plot(ax(i).Pre,indvar,smoothPower,Color=smoothColor(j,:),LineWidth=2);
             else
                 SpectrumLines.Psd(i,j).XData = indvar;
                 SpectrumLines.Psd(i,j).YData = psd;
@@ -696,7 +694,7 @@ pointMethod = userInput.pointMethod;
 nPoints = userInput.nPoints;
 widthMethod = userInput.widthMethod;
 percentWidth = userInput.percentWidth;
-windowWidth = (percentWidth)*range(logY);
+windowWidth = (percentWidth)*range(logX);
 ydataSmooth = smoothdata(logY,pointMethod,nPoints);
 ydataSmooth = smoothdata(ydataSmooth,widthMethod,windowWidth,SamplePoints=logX);
 % return to linscale
@@ -732,23 +730,23 @@ if upper ~= 0
 end
 end
 % get inputs from the GUI and save in Config
-function Config = GetInputs(plt,Config)
-sp = Config.Spectrum;
-sp.winType = plt.WindowDropdown.Value;
-sp.N = Config.ntimetot;
-sp.nSegments = plt.WindowEditbox.Value;
-sp.overlapPercentage = plt.NoverlapEditbox.Value;
-sp.energyPercentage = plt.EnergyPercentageEditbox.Value;
-sp.nRows = plt.PodRowEditbox.Value;
-sp.nCols = plt.PodColEditbox.Value;
-Config.Spectrum = sp;
+function Config_next = GetInputs(plt,Config_prev,Config_next)
+Config_next.Spectrum.winType = plt.WindowDropdown.Value;
+Config_next.Spectrum.N = Config_next.ntimetot;
+maxSegments_prev = MaxSegments(Config_prev);
+curSegments_prev = plt.WindowEditbox.Value;
+maxSegments_next = MaxSegments(Config_next);
+curSegments_next = round(maxSegments_next * (curSegments_prev/maxSegments_prev));
+Config_next.Spectrum.nSegments = curSegments_next;
+Config_next.Spectrum.overlapPercentage = plt.NoverlapEditbox.Value;
+Config_next.Spectrum.energyPercentage = plt.EnergyPercentageEditbox.Value;
+Config_next.Spectrum.nRows = plt.PodRowEditbox.Value;
+Config_next.Spectrum.nCols = plt.PodColEditbox.Value;
 
-sm = Config.Smooth;
-sm.pointMethod;
-sm.nPoints = plt.SmoothPointEditbox.Value;
-sm.widthMethod;
-sm.percentWidth = plt.SmoothWidthEditbox.Value;
-Config.Smooth = sm;
+Config_next.Smooth.pointMethod;
+Config_next.Smooth.nPoints = plt.SmoothPointEditbox.Value;
+Config_next.Smooth.widthMethod;
+Config_next.Smooth.percentWidth = plt.SmoothWidthEditbox.Value;
 end
 % xdata and ydata are found at the borders of the view window defined by
 % xlims and ylims
@@ -935,9 +933,16 @@ function FilenameValueChanged(src,event)
 f = ancestor(src,'figure','toplevel');
 plt = f.UserData;
 AllStruct = plt.AllStruct;
+% get the Config struct from the previous file
+nfile_prev = event.PreviousValueIndex;
+Config_prev = AllStruct(nfile_prev).Config;
 % get the Config struct from the new file
 nfile = event.ValueIndex;
 Config = AllStruct(nfile).Config;
+% move spectrum and smoothing inputs from the previous Config to the new
+Config = GetInputs(plt,Config_prev,Config);
+plt.AllStruct(nfile).Config = Config;
+
 % window slider/editbox limits/values
     minVal = 1;
     maxVal = MaxSegments(Config);

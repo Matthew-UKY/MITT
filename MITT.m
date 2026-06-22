@@ -28,7 +28,7 @@ f = SetCallbackFunctions(f);
 %% Callback functions
 
 %%  File and Message Center
-% to get/setup the CSV control file
+% to get/setup the control file
 function hgetfileCallback(~, ~, ~)
 f = gcbf;
 hGUIControl = f.UserData.hGUIControl;
@@ -39,59 +39,40 @@ P = f.UserData.P;
         dataPath = '';
     end
     % get the folder housing the data
-    CSVControlpathname = uigetdir(dataPath,'Get data folder');
-    CSVControlfilename = [CSVControlpathname,filesep,'ControlFile.csv'];
+    Controlpathname = uigetdir(dataPath,'Get data folder');
+    Controlfilename = fullfile(Controlpathname,'Control.xlsx');
     % if default named control file doesn't exist
-    if ~isfile(CSVControlfilename)
-        datadir = dir(CSVControlpathname);
-        datadir = struct2table(datadir);
-        datadir = datadir(~datadir.isdir,:);
-        [~,indx] = natsort(datadir.name);
-        datadir = datadir(indx,:);
+    if ~isfile(Controlfilename)
+        datadir = dir(Controlpathname);
+        datadir = datadir(~[datadir.isdir]);
+        [~,sortIndx] = natsort({datadir.name});
+        datadir = datadir(sortIndx);
         
-        % check for existence of csv files
-        nFiles = length(datadir.name);
+        % get file extensions of the data files
+        nFiles = length(datadir);
         fileExtensions = cell(nFiles,1);
         for i = 1:nFiles
-            temp1 = strsplit(datadir.name{i},'.');
+            temp1 = strsplit(datadir(i).name,'.');
             fileExtensions{i} = temp1{end};
         end
-        % user might have made their own control file (e.g. prev version)
-        if any(strcmp(fileExtensions,'csv'))
-            temp = uigetfile('*.csv','Select existing Control file',CSVControlpathname);
-            filename = [CSVControlpathname,filesep,temp];
-            CSVControl = readtable(filename);
-            if ~ismember('filename', CSVControl.Properties.VariableNames)
-                P.message.Value{end+1} = 'Please pick a valid csv control file.';
-                scroll(P.message,'bottom')
-                return
-            end
-            [~,indx] = natsort(CSVControl.filename);
-            CSVControl = CSVControl(indx,:);
-            writetable(CSVControl,CSVControlfilename)
-        % otherwise, user has not made a control file yet
-        else
-            % fill in control file information that is known up front, e.g.
-            % instrument type (from file extension) and filename. zpos is
-            % estimated from the filename, assuming it's written in cm
-            CSVControl = DefaultCSVControl(datadir,fileExtensions,CSVControlpathname);
-            writetable(CSVControl,CSVControlfilename)
-        end
+
+        % fill in control file information that is known up front, e.g.
+        % instrument type (from file extension) and filename. zpos is
+        % estimated from the filename, assuming it's written in cm
+        Control = DefaultControlFile(datadir,fileExtensions,Controlpathname);
+        WriteControlFile(Control,Controlfilename)
     end
-    CSVControl = readtable(CSVControlfilename);
-    hGUIControl.FilestoCombine.Items = CSVControl.filename;
+    Control = ReadControlFile(Controlfilename);
+    hGUIControl.FilestoCombine.Items = Control.filename;
     % set field values equal to name and path of file
-    hGUIControl.CSVControlpathname.Text = CSVControlpathname;
-    hGUIControl.CSVControlfilename.Text = 'ControlFile.csv';
+    hGUIControl.Controlpathname.Text = Controlpathname;
+    hGUIControl.Controlfilename.Text = 'Control.xlsx';
     % add data input folder to the path
-    addpath(genpath(CSVControlpathname))
-    % set and create output directory (odir) 
-    odir = [CSVControlpathname,filesep,'MITT Filtered Data'];
-    % check for existance of odir
-    chk1 = dir(odir);
-    % if odir does not exist
-    if isempty(chk1)
-        % make it
+    addpath(genpath(Controlpathname))
+    % set and create output directory (odir)
+    odir = fullfile(Controlpathname,'MITT Filtered Data');
+    % create odir if it does not exist
+    if ~isfolder(odir)
         mkdir(odir);
     end
     % add odir to the path
@@ -102,7 +83,7 @@ P = f.UserData.P;
     P.message.Value = {'New data path selected'};
     % turn on Select button
     P.Select.Visible = 'on';
-f.UserData.CSVControl = CSVControl;
+f.UserData.Control = Control;
 f.UserData.hGUIControl = hGUIControl;
 f.UserData.P = P;
 end
@@ -219,23 +200,20 @@ f.UserData.faQC = faQC;
 end
 
 %% Organization Control Panel
-% to edit the csv control file
-function hEditCSVCallback(~,~,~)
-% Known bug for editing the CSV where editing directly from excel screws up
-% the dates. To fix this, could simply store the date as a datenum or
-% unixtime. Annoying.
+% to edit the control file
+function hEditControlCallback(~,~,~)
 f = gcbf;
 hGUIControl = f.UserData.hGUIControl;
 P = f.UserData.P;
-    fcsv = figure(WindowState='maximized',...
-                  Name='CSV Editing Window');
+    fexcel = figure(WindowState='maximized',...
+                  Name='Control File Editing Window');
     pause(1) % allow figure to open
-    % load csv control from its file location
-    CSVControlpathname = hGUIControl.CSVControlpathname.Text;
-    CSVControlfilename = hGUIControl.CSVControlfilename.Text;
-    CSVControl = readtable([CSVControlpathname,filesep,CSVControlfilename]);
-    t = uitable(fcsv,Data=CSVControl);
-    t.Position = [0 0 fcsv.Position(3) fcsv.Position(4)];
+    % load control from its file location
+    Controlpathname = hGUIControl.Controlpathname.Text;
+    Controlfilename = hGUIControl.Controlfilename.Text;
+    Control = ReadControlFile(fullfile(Controlpathname,Controlfilename));
+    t = uitable(fexcel,Data=Control);
+    t.Position = [0 0 fexcel.Position(3) fexcel.Position(4)];
     t.ColumnEditable = true;
     t.CellEditCallback = @hCellEditCallback;
     t.UserData = f;
@@ -247,11 +225,11 @@ function hCellEditCallback(src,~,~)
 t = src;
 f = t.UserData;
 hGUIControl = f.UserData.hGUIControl;
-CSVControl = t.Data;
-CSVControlpathname = hGUIControl.CSVControlpathname.Text;
-CSVControlfilename = hGUIControl.CSVControlfilename.Text;
-writetable(CSVControl,[CSVControlpathname,filesep,CSVControlfilename])
-f.UserData.CSVControl = CSVControl;
+Control = t.Data;
+Controlpathname = hGUIControl.Controlpathname.Text;
+Controlfilename = hGUIControl.Controlfilename.Text;
+WriteControlFile(Control,fullfile(Controlpathname,Controlfilename))
+f.UserData.Control = Control;
 end
 % to combine files before organization occurs
 function hCombineFilesCallback(~,~,~)
@@ -268,17 +246,17 @@ function hFileCombineCallback(~,~,~)
 f = gcbf;
 hGUIControl = f.UserData.hGUIControl;
 P = f.UserData.P;
-CSVControl = f.UserData.CSVControl;
-CSVControlfilename = hGUIControl.CSVControlfilename.Text;
-CSVControlpathname = hGUIControl.CSVControlpathname.Text;
+Control = f.UserData.Control;
+Controlfilename = hGUIControl.Controlfilename.Text;
+Controlpathname = hGUIControl.Controlpathname.Text;
     files = hGUIControl.FilestoCombine.Value;
-    IsSelected = ismember(CSVControl.filename,files);
-    ins = CSVControl.instrument(IsSelected);
+    IsSelected = ismember(Control.filename,files);
+    ins = Control.instrument(IsSelected);
     % files selected must be VectrinoII's and must be more than one file
-    if all(strcmp(ins,'VectrinoII')) || length(ins) > 1
+    if all(strcmp(ins,'VectrinoII')) && length(ins) > 1
         startTime = zeros(length(files),1);
         for i = 1:length(files)
-            file = [CSVControlpathname,filesep,files{i}];
+            file = fullfile(Controlpathname,files{i});
             load(file,'Config')
             startTime(i) = Config.startCollectionTime_seconds + Config.startCollectionTime_subseconds;
         end
@@ -286,47 +264,58 @@ CSVControlpathname = hGUIControl.CSVControlpathname.Text;
             AllStruct = struct();
             % load each file and save its raw data in AllStruct
             for i = 1:length(files)
-                file = [CSVControlpathname,filesep,files{i}];
+                file = fullfile(Controlpathname,files{i});
                 load(file,'Data','Config')
                 AllStruct(i).Data = Data;
                 AllStruct(i).Config = Config;
             end
             [Data,Config] = CombineFiles(AllStruct);
             % save into the data folder under a new name
-            ySame = (files{1}-files{2}) == 0;
-            defname = files{1}(ySame);
+            len = cellfun(@length,files);
+            len = min(len);
+            files = cellfun(@(x) x(1:len),files,'UniformOutput',false);
+            logiSame = true(1,len);
+            for i = 1:length(files)-1
+                logiSame = files{i+1} == files{i} & logiSame;
+            end
+            defname = files{1}(logiSame);
             if isempty(defname)
                 defname = 'Combined File';
             end
-            combinedFilename = uiputfile('*.mat','Save combined file',[CSVControlpathname,filesep,defname]);
+            combinedFilename = uiputfile('*.mat','Save combined file',fullfile(Controlpathname,defname));
             P.message.Value{end+1} = 'Saving combined file...';
             scroll(P.message,'bottom')
-            pause(1) % allow message to pop up
-            save([CSVControlpathname,filesep,combinedFilename],'Config','Data','-v7.3')
+            pause(0.1) % allow message to pop up
+            save_filename = fullfile(Controlpathname,combinedFilename);
+            if ~contains(save_filename,'.mat')
+                save_filename = [save_filename,'.mat'];
+            end
+            save(save_filename,'Config','Data','-v7.3')
             P.message.Value{end+1} = 'Done';
             scroll(P.message,'bottom')
 
             % move old files to a new folder called 'Uncombined Files'
-            uncombinedFolder = [CSVControlpathname,filesep,'Uncombined Files'];
+            uncombinedFolder = [Controlpathname,filesep,'Uncombined Files'];
             if ~isfolder(uncombinedFolder)
                 mkdir(uncombinedFolder)
             end
             for i = 1:length(files)
-                file = [CSVControlpathname,filesep,files{i}];
+                file = fullfile(Controlpathname,files{i});
                 movefile(file,uncombinedFolder)
             end
-            % update the csv control file to reflect the change
-            IsCombined = ismember(CSVControl.filename,files);
-            datarow = CSVControl(IsCombined,:);
+            % update the control file to reflect the change
+            IsCombined = ismember(Control.filename,files);
+            datarow = Control(IsCombined,:);
             datarow = datarow(1,:);
             datarow.filename = combinedFilename;
             datarow.zpos = NumFromString(datarow.filename);
-            CSVControl(IsCombined,:) = [];
-            CSVControl = [CSVControl;datarow];
-            CSVControl = sortrows(CSVControl,'filename');
-            writetable(CSVControl,[CSVControlpathname,filesep,CSVControlfilename])
+            Control(IsCombined,:) = [];
+            Control = [Control;datarow];
+            [~,sortIndx] = natsort(Control.filename);
+            Control = Control(sortIndx,:);
+            WriteControlFile(Control,fullfile(Controlpathname,Controlfilename));
             % update GUI to reflect the change, i.e. the FiletoCombine list
-            hGUIControl.FilestoCombine.Items = CSVControl.filename;
+            hGUIControl.FilestoCombine.Items = Control.filename;
             hGUIControl.FilestoCombine.Value = combinedFilename;
         else
             P.message.Value{end+1} = 'Files are not from the same data collection';
@@ -336,7 +325,7 @@ CSVControlpathname = hGUIControl.CSVControlpathname.Text;
         P.message.Value{end+1} = 'This function only works for the VectrinoII';
         scroll(P.message,'bottom')
     end
-f.UserData.CSVControl = CSVControl;
+f.UserData.Control = Control;
 f.UserData.hGUIControl = hGUIControl;
 f.UserData.P = P;
 end
@@ -626,7 +615,7 @@ faQC = f.UserData.faQC;
     % get output directory
     GUIControl.odir = f.UserData.odir;
     % set output filename
-    GUIControl.outname = [GUIControl.odir,filesep,GUIControl.CSVControlfilename(1:end-4),'_output.mat'];
+    GUIControl.outname = [GUIControl.odir,filesep,GUIControl.Controlfilename(1:end-4),'_output.mat'];
     % if SpikeARMA is active
     if GUIControl.SpikeARMA
         % get ARMAopts from figure
@@ -858,15 +847,15 @@ grid2 = uigridlayout(P.File,[3,2],def.Grid,...
 % file selection pushbutton
 P.getfile = uibutton(grid2,def.Button, ...
     Text = 'Select File');
-% CSVControl filename textbox
-GUIControl.CSVControlfilename = uilabel(grid2,def.Label, ...
+% Control filename textbox
+GUIControl.Controlfilename = uilabel(grid2,def.Label, ...
     BackgroundColor = backcol,...
     HorizontalAlignment = 'left');
-% CSVControl pathname textbox
-GUIControl.CSVControlpathname = uilabel(grid2,def.Label, ...
+% Control pathname textbox
+GUIControl.Controlpathname = uilabel(grid2,def.Label, ...
     BackgroundColor = backcol,...
     HorizontalAlignment = 'left');
-    GUIControl.CSVControlpathname.Layout.Column = [1,2];
+    GUIControl.Controlpathname.Layout.Column = [1,2];
 % message textbox
 P.message = uitextarea(grid2,...
     FontSize = Fsize,...
@@ -880,9 +869,9 @@ P.Organize = uipanel(grid1,def.Panel, ...
     Title = 'Organization block options');
 grid2 = uigridlayout(P.Organize,[8,1],def.Grid,...
     RowHeight = {btn.height,btn.height,btn.height*5,btn.height,btn.height,'fit',btn.height,'fit'});
-% edit csv file button
-GUIControl.EditCSV = uibutton(grid2,def.Button,...
-    Text = 'Edit CSV File');
+% edit controle file button
+GUIControl.EditControl = uibutton(grid2,def.Button,...
+    Text = 'Edit Control File');
 % Combine files checkbox
 GUIControl.CombineFiles = uicheckbox(grid2,def.Checkbox, ...
     Text = 'Combine split files');
@@ -1249,14 +1238,14 @@ end
 function f = SetCallbackFunctions(f)
 P = f.UserData.P;
 hGUIControl = f.UserData.hGUIControl;
-    % set the CSVcontrol file names
+    % set the Control file names
     set(P.getfile,'ButtonPushedFcn',@hgetfileCallback);
     % Computational block control callbacks
     set(hGUIControl.Organize,'ValueChangedFcn',@hOrganizeCallback);
     set(hGUIControl.Clean,'ValueChangedFcn',@hCleanCallback);
     set(hGUIControl.Classify,'ValueChangedFcn',@hClassifyCallback);
     % Organization block callbacks
-    set(hGUIControl.EditCSV,'ButtonPushedFcn',@hEditCSVCallback);
+    set(hGUIControl.EditControl,'ButtonPushedFcn',@hEditControlCallback);
     set(hGUIControl.CombineFiles,'ValueChangedFcn',@hCombineFilesCallback);
     set(P.FileCombine,'ButtonPushedFcn',@hFileCombineCallback);
     set(hGUIControl.DefineGeometry,'ValueChangedFcn',@hDefineGeometryCallback);
