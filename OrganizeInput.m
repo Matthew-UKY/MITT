@@ -6,10 +6,11 @@ function OrganizeInput(GUIControl,P)
 
 %%
 % get control file
-csvname = [GUIControl.CSVControlpathname,filesep,GUIControl.CSVControlfilename];
-CSVControl = readtable(csvname);
+control_name = fullfile(GUIControl.Controlpathname,GUIControl.Controlfilename);
+Control = ReadControlFile(control_name);
+
 % number of files
-nftot = height(CSVControl);
+nftot = height(Control);
 
 % store output name and number of files
 GUIControl.nftot = nftot;
@@ -19,7 +20,7 @@ if GUIControl.DefineGeometry
     P.message.Value{end+1} = '    Runnning CalcChannelMesh';
     scroll(P.message,'bottom')
     pause(0.01)
-    GUIControl = CalcChannelMesh(GUIControl,CSVControl);
+    GUIControl = CalcChannelMesh(GUIControl,Control);
 end
 % save file
 chk = dir(GUIControl.outname);
@@ -34,21 +35,18 @@ end
 % for each file
 for nf = 1:nftot
     % load data by sending Control structure to the instrument-appropriate Organize**Data file
-    OrganizeData = str2func(['Organize',CSVControl.instrument{nf},'Data']);
-    P.message.Value{end+1} = ['    ',CSVControl(nf,:).filename{1}];
+    OrganizeData = str2func(['Organize',Control.instrument{nf},'Data']);
+    P.message.Value{end+1} = ['    ',Control.filename{nf}];
     scroll(P.message,'bottom')
     pause(0.01)
-    [Data,Config] = OrganizeData(GUIControl,CSVControl(nf,:));
-
-    Config.CSVControlpathname = GUIControl.CSVControlpathname;
-    % filename
-    Config.filename = CSVControl.filename{nf};
+    [Data,Config] = OrganizeData(GUIControl,Control(nf,:));
+    % save control info to Config
+    Config.Controlpathname = GUIControl.Controlpathname;
+    Config.filename = Control.filename{nf};
     % save Config and Data to the output file
-    oname = [GUIControl.odir,filesep,'MITT_',Config.filename];
-    % chk for any output files
-    chk = dir(oname);
+    oname = fullfile(GUIControl.odir,['MITT_',Config.filename]);
     % if this file has not been created
-    if isempty(chk)
+    if ~isfile(oname)
         % add empty variables faQC and goodCells to Config in
         % preparation for data quality control
         Config.faQC = struct;

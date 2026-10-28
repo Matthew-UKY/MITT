@@ -1,20 +1,21 @@
-function [Data,Config] = OrganizeVectrinoIIData(GUIControl,CSVControl)
+function [Data,Config] = OrganizeVectrinoIIData(GUIControl,Control_One_Row)
 % gets raw data from VectrinoII output files and saves in Config, Data.  
 % called from AOrganize
 % subfunctions include CalcConfigVectrinoII GetDataVectrinoII
 
 %% get Config and Data
 % get filenames
-inname = strcat(GUIControl.CSVControlpathname,filesep,CSVControl.filename{1});
+inname = fullfile(GUIControl.Controlpathname,Control_One_Row.filename{1});
+
 % get Config data from subprogram
 Config = CalcConfigVectrinoII(inname);
 % save component names in Config
 Config.comp = {'u';'v';'w1';'w2'};
-% get all variables from CSVControl and put them in Config
-vnames = CSVControl.Properties.VariableNames;
+% get all variables from Control and put them in Config
+vnames = Control_One_Row.Properties.VariableNames;
 nftot = length(vnames);
 for nf = 1:nftot
-    Config.(vnames{nf}) = CSVControl.(vnames{nf});
+    Config.(vnames{nf}) = Control_One_Row.(vnames{nf});
 end
 
 % calculate sampling volume (estimated - difficult to actually calculate
@@ -169,7 +170,7 @@ switch Orientation
     case 2 % +180z
         Data.Vel.u = -1 * Data.Vel.u;
         Data.Vel.v = -1 * Data.Vel.v;
-    case 3 % -90x, 180y
+    case 3 % -90x, 180y (OR 180z, -90x)
         tData = Data;
         Data.Vel.u = -1 * tData.Vel.u;
         Data.Vel.v = (tData.Vel.w1 + tData.Vel.w2)/2;
@@ -181,7 +182,7 @@ switch Orientation
         Data.Vel.v = (tData.Vel.w1 + tData.Vel.w2)/2;
         Data.Vel.w1 = -1 * tData.Vel.v;
         Data.Vel.w2 = -1 * tData.Vel.v;
-    case 5 % +90x, 180y
+    case 5 % +90x, 180y (OR 180z, +90x)
         tData = Data;
         Data.Vel.u = -1 * tData.Vel.u;
         Data.Vel.v = -1 * (tData.Vel.w1 + tData.Vel.w2)/2;

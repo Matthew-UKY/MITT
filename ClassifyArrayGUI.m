@@ -102,14 +102,16 @@ plt.UserData.allDatanames = allDatanames;
         % plot default profiles
         B.X(nx).var.Value = [GUIControl.nxvar,'.',comp{nx}];
         B.X(nx).analysis.Value = 'mean'; % default
-        hxanalysisCallback(plt,[],nx)
+        hxplotCallback(plt,[],nx)
 
         % place the legend on the first axis
         if nx==1 
             legend(axe(1),B.selfile.Value, ...
                 TextColor = 'k', ...
                 EdgeColor = 'k', ...
-                FontSize = 9);
+                FontSize = 8, ...
+                Interpreter='none', ...
+                Location='northwest');
         end
     end
     hactfileCallback(plt)
@@ -165,7 +167,9 @@ plt.UserData.SelStruct = SelStruct;
             legend(axe(1),B.selfile.Value, ...
                 TextColor = 'k', ...
                 EdgeColor = 'k', ...
-                FontSize = 9);
+                FontSize = 8, ...
+                Interpreter='none', ...
+                Location='northwest');
         end
     end
     % set field values from Config data
@@ -223,11 +227,28 @@ end
 % xaxis callbacks
 %%%%%
 % does nothing for now
-function hxvarCallback(~, ~, nx)
+function hxvarCallback(src, ~, nx)
 
 end
-% executes when analysis is changed on axis nx
+% also does nothing for now
 function hxanalysisCallback(src, ~, nx)
+
+end
+% executes when either x minimum or x maximum editable box is changed
+function hxminCallback(src, ~, nx)
+% to set x axis limits manually
+plt = ancestor(src,'figure','toplevel');
+B = plt.UserData.B;
+axe = plt.UserData.axe;
+    % get values
+    xmin = B.X(nx).min.Value;
+    xmax = B.X(nx).max.Value;
+    % set axis x limits
+    axe(nx).XLim = [xmin xmax];
+plt.UserData.axe = axe;
+end
+% to plot data in xvar and xanalysis
+function hxplotCallback(src,~,nx)
 % to plot xdata vs ydata for a given axis
 plt = ancestor(src,'figure','toplevel');
 B = plt.UserData.B;
@@ -235,6 +256,7 @@ xdata = plt.UserData.xdata;
 ydata = plt.UserData.ydata;
 axe = plt.UserData.axe;
 SelStruct = plt.UserData.SelStruct;
+GUIControl = plt.UserData.GUIControl;
     % get button values
     typeanalysis = B.X(nx).analysis.Value;
     xvar = B.X(nx).var.Value;
@@ -245,6 +267,8 @@ SelStruct = plt.UserData.SelStruct;
     % loop to plot Dataa
     nsFtot = length(SelStruct);
     colline = getColline(nsFtot);
+    mkrsize = 25;
+    mkr = '*';
     h = gobjects(nsFtot,1);
     for nsF = 1:nsFtot
         % get data from SelStruct
@@ -260,13 +284,11 @@ SelStruct = plt.UserData.SelStruct;
             meanx1 = mean(dat);
             lx = [meanx1-serror;meanx1+serror];
             ly = [ydata{nsF};ydata{nsF}];
-            line(axe(nx),lx,ly,'Color',col1,'LineStyle','-','Marker','+');
+            line(axe(nx),lx,ly,'Color',colline(nsF,:),'LineStyle','-','Marker','+');
         end
         % plot line
-        h(nsF) = line(axe(nx),xdata{nx,nsF},ydata{nsF}, ...
-            'Color',colline(nsF,:), ...
-            'LineStyle','none', ...
-            'Marker','*');
+        h(nsF) = scatter(axe(nx),xdata{nx,nsF},ydata{nsF},mkrsize,colline(nsF,:),mkr, ...
+            'DisplayName',GUIControl.MITTdir.name{nsF});
     end
     
     % get automatically determined limits to plot
@@ -281,19 +303,7 @@ SelStruct = plt.UserData.SelStruct;
 plt.UserData.xdata = xdata;
 plt.UserData.B = B;
 end
-% executes when either x minimum or x maximum editable box is changed
-function hxminCallback(src, ~, nx)
-% to set x axis limits manually
-plt = ancestor(src,'figure','toplevel');
-B = plt.UserData.B;
-axe = plt.UserData.axe;
-    % get values
-    xmin = B.X(nx).min.Value;
-    xmax = B.X(nx).max.Value;
-    % set axis x limits
-    axe(nx).XLim = [xmin xmax];
-plt.UserData.axe = axe;
-end
+
 % executes when clear axis button is pushed
 function hxclearCallback(src, ~, nx)
 % to clear all data and legends from axis
@@ -337,6 +347,7 @@ function hplotoneCallback(src, ~, ~)
 plt = ancestor(src,'figure','toplevel');
 ydata = plt.UserData.ydata;
 SelStruct = plt.UserData.SelStruct;
+GUIControl = plt.UserData.GUIControl;
 B = plt.UserData.B;
     % get values
     naF = get(B.actfile,'ValueIndex');
@@ -347,8 +358,13 @@ B = plt.UserData.B;
     % find nearest point
     [~,naP] = min(abs(yi-ydata{naF}));
 
+    % make the def struct
+    Config = SelStruct(naF).Config;
+    def = DefaultPlotSeries(Config,GUIControl);
+    def.CellValue = naP;
+
     % plot that point as a time series
-    PlotTimeSeries(SelStruct(naF).Config,SelStruct(naF).Data,naP);
+    PlotTimeSeries(SelStruct,def);
 end
 % to turn on filtering panel and load previous filter
 function hplotarrayimageCallback(src, ~, ~)
@@ -609,6 +625,7 @@ t = tiledlayout(pnl,1,3);
     t.Padding = 'tight';
 for nx=1:nxtot
     axe(nx) = nexttile(t);
+    axe(nx).NextPlot = 'add';
     if nx>1
         axe(nx).YTickLabel = [];
     end
@@ -770,10 +787,12 @@ X.max = uieditfield(grid,'numeric',def.Editfield);
 % analysis type
 X.analysis = uidropdown(grid,def.Dropdown,...
     Items = {'sum','mean','std ','skew','kurt','box '});
+% plot current selection
+X.plot = uibutton(grid,def.Button, ...
+    Text = 'Plot');
 % clear axis
 X.clear = uibutton(grid,def.Button,...
     Text = 'Clear axis');
-    X.clear.Layout.Column = [2,3];
 end
 % initializes the state of all ui elements
 function initializeUIElements(B,P,nxtot)
@@ -820,6 +839,7 @@ for nx = 1:nxtot
     set(B.X(nx).analysis,'ValueChangedFcn',{@hxanalysisCallback,nx});
     set(B.X(nx).min,'ValueChangedFcn',{@hxminCallback,nx});
     set(B.X(nx).max,'ValueChangedFcn',{@hxminCallback,nx});
+    set(B.X(nx).plot,'ButtonPushedFcn',{@hxplotCallback,nx})
     set(B.X(nx).clear,'ButtonPushedFcn',{@hxclearCallback,nx});
 end
 end

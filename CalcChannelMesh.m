@@ -1,4 +1,4 @@
-function GUIControl = CalcChannelMesh(GUIControl,CSVControl)
+function GUIControl = CalcChannelMesh(GUIControl,Control)
 % 3rd level program for organization of calculation of test volume
 % topography and water surface grid
 % Called from OrganizeInput
@@ -17,11 +17,11 @@ else
         [oneD,twoD] = InterpNonUniformChan(filename1);
     elseif strcmp(GUIControl.ChannelDefinition,'subprogram') % a subprogram has been specified
         CalcChannel = str2func(GUIControl.CalcChannelfile);
-        [oneD,twoD] = CalcChannel(GUIControl,CSVControl);
+        [oneD,twoD] = CalcChannel(GUIControl,Control);
     end
 end
 
-% save one and two dimensional meshes to C for safekeeping
+% save one and two dimensional meshes to GUIControl for safekeeping
 GUIControl.oneD = oneD;
 GUIControl.twoD = twoD;
 

@@ -25,7 +25,8 @@ for i = 1:nFiles
         % save faQC to Config
         Config.faQC = GUIControl.faQC;
         % append updated Config to file
-        save([GUIControl.odir,filesep,GUIControl.MITTdir.name{i}],'Config','-append');
+        outname = fullfile(GUIControl.odir,GUIControl.MITTdir.name{i});
+        save(outname,'Config','-append','-v7.3');
     end
 
     if GUIControl.plotQCauto

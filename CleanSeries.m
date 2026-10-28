@@ -40,7 +40,7 @@ if GUIControl.Despike || GUIControl.FiltrBW || GUIControl.SpikeReset
         end
 
         % save data
-        save(inname,'Config','Data');
+        save(inname,'Config','Data','-v7.3');
     end
 end
 end

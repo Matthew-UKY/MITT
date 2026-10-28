@@ -615,7 +615,7 @@ faQC = f.UserData.faQC;
     % get output directory
     GUIControl.odir = f.UserData.odir;
     % set output filename
-    GUIControl.outname = [GUIControl.odir,filesep,GUIControl.Controlfilename(1:end-4),'_output.mat'];
+    GUIControl.outname = fullfile(GUIControl.odir,[GUIControl.Controlfilename(1:end-5),'_output.mat']);
     % if SpikeARMA is active
     if GUIControl.SpikeARMA
         % get ARMAopts from figure
@@ -711,19 +711,7 @@ faQC = f.UserData.faQC;
             end
             if GUIControl.VisualizeData
                 Config = AllStruct(1).Config;
-                Acolor = [0,0,1;
-                          0,1,0;
-                          1,0,0]; % blue, green, red
-                yAnalysis = [true,Config.Despiked,Config.Filtered];
-                def = struct();
-                def.FileItems = GUIControl.MITTdir.name;
-                def.FileValue = GUIControl.MITTdir.name{1};
-                def.AnalysisValue = [true,false,false];
-                def.AnalysisVisible = yAnalysis;
-                def.AnalysisColors = Acolor;
-                def.CellValue = 1;
-                def.CellMin = 1;
-                def.CellMax = Config.nCells;
+                def = DefaultPlotSeries(Config,GUIControl);
                 if GUIControl.plotTimeSeries
                     % send to plotTimeSeries subprogram
                     PlotTimeSeries(AllStruct,def)

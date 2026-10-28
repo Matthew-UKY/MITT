@@ -486,6 +486,7 @@ Config = plt.AllStruct(nfile).Config;
 SpectrumLines = plt.SpectrumLines;
 SmoothLines = plt.SmoothLines;
 Config = GetInputs(plt,Config,Config);
+Config = ValidateInputs(plt,Config);
 
 % config variables
     comp = Config.comp;
@@ -747,6 +748,16 @@ Config_next.Smooth.pointMethod;
 Config_next.Smooth.nPoints = plt.SmoothPointEditbox.Value;
 Config_next.Smooth.widthMethod;
 Config_next.Smooth.percentWidth = plt.SmoothWidthEditbox.Value;
+end
+% validate the inputs in Config
+function Config = ValidateInputs(plt,Config)
+N = Config.Spectrum.N;
+nRows = Config.Spectrum.nRows;
+nCols = Config.Spectrum.nCols;
+if nRows * nCols > N
+    Config.Spectrum.nRows = floor(sqrt(N));
+    Config.Spectrum.nCols = floor(N/nRows);
+end
 end
 % xdata and ydata are found at the borders of the view window defined by
 % xlims and ylims
